@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
+const DEFAULT_DB_PORT = 3306;
+
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({
@@ -10,7 +12,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       useFactory: (configService: ConfigService) => ({
         type: 'mysql',
         host: configService.get<string>('database.host', 'localhost'),
-        port: configService.get<number>('database.port', 3306),
+        port: configService.get<number>('database.port', DEFAULT_DB_PORT),
         username: configService.get<string>('database.username', 'root'),
         password: configService.get<string>('database.password', 'root'),
         database: configService.get<string>('database.database', 'conduit_db'),

@@ -8,6 +8,18 @@ import {
 } from '@nestjs/common';
 import { ValidationError } from 'class-validator';
 
+function formatValidationErrors(errors: ValidationError[]): UnprocessableEntityException {
+  const formattedErrors: Record<string, string[]> = {};
+  for (const err of errors) {
+    if (err.constraints) {
+      formattedErrors[err.property] = Object.values(err.constraints);
+    }
+  }
+  return new UnprocessableEntityException({
+    errors: formattedErrors,
+  });
+}
+
 @Injectable()
 export class ConduitValidationPipe extends NestValidationPipe implements PipeTransform {
   constructor() {
@@ -16,17 +28,7 @@ export class ConduitValidationPipe extends NestValidationPipe implements PipeTra
       forbidNonWhitelisted: true,
       transform: true,
       errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
-      exceptionFactory: (errors: ValidationError[]) => {
-        const formattedErrors: Record<string, string[]> = {};
-        for (const err of errors) {
-          if (err.constraints) {
-            formattedErrors[err.property] = Object.values(err.constraints);
-          }
-        }
-        return new UnprocessableEntityException({
-          errors: formattedErrors,
-        });
-      },
+      exceptionFactory: formatValidationErrors,
     });
   }
 

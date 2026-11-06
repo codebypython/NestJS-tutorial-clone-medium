@@ -14,8 +14,6 @@ interface ConduitErrorResponse {
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
-  private readonly logger = new Logger(AllExceptionsFilter.name);
-
   catch(exception: unknown, host: ArgumentsHost): void {
     const context = host.switchToHttp();
     const response = context.getResponse<Response>();
@@ -45,7 +43,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         }
       }
     } else if (exception instanceof Error) {
-      this.logger.error(`Unhandled Exception: ${exception.message}`, exception.stack);
+      Logger.error(`Unhandled Exception: ${exception.message}`, exception.stack, 'AllExceptionsFilter');
       errorBody = { error: [exception.message] };
     }
 
@@ -53,7 +51,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
       errors: errorBody,
     };
 
-    this.logger.warn(`[${request.method}] ${request.url} - Status: ${status}`);
+    const safeMethod = String(request.method).replace(/[\r\n]/g, '');
+    const safeUrl = String(request.url)
+      .replace(/[\r\n]/g, '')
+      .slice(0, 100);
+    Logger.warn(`HTTP exception handled: ${safeMethod} ${safeUrl} with status ${status}`, 'AllExceptionsFilter');
 
     response.status(status).json(output);
   }

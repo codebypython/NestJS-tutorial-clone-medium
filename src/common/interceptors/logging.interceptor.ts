@@ -4,8 +4,6 @@ import { tap } from 'rxjs/operators';
 
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
-  private readonly logger = new Logger('HTTP');
-
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<{ method: string; url: string }>();
     const { method, url } = request;
@@ -15,7 +13,7 @@ export class LoggingInterceptor implements NestInterceptor {
       tap(() => {
         const response = context.switchToHttp().getResponse<{ statusCode: number }>();
         const delay = Date.now() - now;
-        this.logger.log(`[${method}] ${url} - ${response.statusCode} - +${delay}ms`);
+        Logger.log(`[${method}] ${url} - ${response.statusCode} - +${delay}ms`, 'HTTP');
       }),
     );
   }
