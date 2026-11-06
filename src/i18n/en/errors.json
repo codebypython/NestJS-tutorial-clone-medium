@@ -1,0 +1,6 @@
+{
+  "notFound": "Resource not found",
+  "unauthorized": "Unauthorized access",
+  "forbidden": "Action forbidden",
+  "validationError": "Validation failed"
+}

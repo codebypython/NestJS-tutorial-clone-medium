@@ -1,0 +1,5 @@
+{
+  "greeting": "Chào mừng đến với Conduit RealWorld API",
+  "status": "Hệ thống đang hoạt động bình thường",
+  "description": "Hiện thực hóa backend NestJS chuẩn doanh nghiệp tuân thủ Google TypeScript Style Guide."
+}
