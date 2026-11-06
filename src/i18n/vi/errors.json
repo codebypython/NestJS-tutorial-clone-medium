@@ -1,0 +1,6 @@
+{
+  "notFound": "Không tìm thấy tài nguyên",
+  "unauthorized": "Truy cập không được xác thực",
+  "forbidden": "Hành động bị cấm",
+  "validationError": "Thẩm định dữ liệu thất bại"
+}
