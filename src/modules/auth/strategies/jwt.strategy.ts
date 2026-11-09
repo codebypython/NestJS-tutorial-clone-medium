@@ -33,6 +33,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload): Promise<User> {
+    if (!payload?.sub) {
+      throw new UnauthorizedException('Invalid token payload');
+    }
     const user = await this.usersService.findById(payload.sub);
     if (!user) {
       throw new UnauthorizedException('User account not found');
@@ -40,3 +43,4 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     return user;
   }
 }
+

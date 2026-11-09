@@ -1,9 +1,11 @@
 import { INestApplication } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/filters/http-exception.filter';
 import { ConduitValidationPipe } from '../src/common/pipes/validation.pipe';
+
 
 describe('Authentication & User Endpoints (e2e)', () => {
   let app: INestApplication;
@@ -169,6 +171,29 @@ describe('Authentication & User Endpoints (e2e)', () => {
       expect(response.body.user).toHaveProperty('email', testUser.email);
     });
 
+    it('should return current user with lowercase scheme (token <jwt> and bearer <jwt>)', async () => {
+      const tokenResponse = await request(app.getHttpServer())
+        .get('/api/user')
+        .set('Authorization', `token ${authToken}`)
+        .expect(200);
+      expect(tokenResponse.body.user).toHaveProperty('email', testUser.email);
+
+      const bearerResponse = await request(app.getHttpServer())
+        .get('/api/user')
+        .set('Authorization', `bearer ${authToken}`)
+        .expect(200);
+      expect(bearerResponse.body.user).toHaveProperty('email', testUser.email);
+    });
+
+    it('should return current user with multi-space header (Token   <jwt>)', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/user')
+        .set('Authorization', `Token   ${authToken}`)
+        .expect(200);
+
+      expect(response.body.user).toHaveProperty('email', testUser.email);
+    });
+
     it('should reject request with HTTP 401 when no token is provided', async () => {
       await request(app.getHttpServer()).get('/api/user').expect(401);
     });
@@ -178,6 +203,23 @@ describe('Authentication & User Endpoints (e2e)', () => {
         .get('/api/user')
         .set('Authorization', 'Token invalid.token.signature')
         .expect(401);
+    });
+
+    it('should reject request with HTTP 401 when valid JWT contains non-existent user sub', async () => {
+      const jwtService = app.get<JwtService>(JwtService);
+      const ghostToken = jwtService.sign({
+        sub: '00000000-0000-0000-0000-000000000000',
+        email: 'ghost@ghost.ghost',
+        username: 'ghost',
+      });
+
+
+      const response = await request(app.getHttpServer())
+        .get('/api/user')
+        .set('Authorization', `Token ${ghostToken}`)
+        .expect(401);
+
+      expect(response.body).toHaveProperty('errors');
     });
   });
 
@@ -194,13 +236,19 @@ describe('Authentication & User Endpoints (e2e)', () => {
       );
     });
 
-    it('should reject subsequent requests with the blacklisted token with HTTP 401', async () => {
-      const response = await request(app.getHttpServer())
+    it('should reject subsequent requests with the blacklisted token with HTTP 401 across all schemes', async () => {
+      const responseToken = await request(app.getHttpServer())
         .get('/api/user')
         .set('Authorization', `Token ${authToken}`)
         .expect(401);
+      expect(responseToken.body).toHaveProperty('errors');
 
-      expect(response.body).toHaveProperty('errors');
+      const responseBearer = await request(app.getHttpServer())
+        .get('/api/user')
+        .set('Authorization', `bearer ${authToken}`)
+        .expect(401);
+      expect(responseBearer.body).toHaveProperty('errors');
     });
   });
+
 });

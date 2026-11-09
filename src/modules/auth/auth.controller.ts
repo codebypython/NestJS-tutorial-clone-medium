@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Post,
   Req,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -87,8 +88,8 @@ export class AuthController {
     description: 'Token successfully blacklisted.',
   })
   @ApiResponse({
-    status: HttpStatus.UNPROCESSABLE_ENTITY,
-    description: 'Authentication token is missing or invalid.',
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Authentication token is missing, invalid, or expired.',
   })
   async logout(
     @Req() req: AuthenticatedRequest,
@@ -97,9 +98,13 @@ export class AuthController {
     if (req.session?.destroy) {
       req.session.destroy();
     }
-    await this.authService.logout(req.token ?? '');
+    if (!req.token) {
+      throw new UnauthorizedException('Authentication token is missing');
+    }
+    await this.authService.logout(req.token);
     return { message: 'Successfully logged out' };
   }
+
 
   @Get('user') // antiCache
   @UseGuards(JwtAuthGuard)

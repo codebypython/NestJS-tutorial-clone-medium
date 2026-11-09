@@ -33,14 +33,16 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const token = this.extractTokenFromHeader(request);
 
-    if (token) {
-      const isBlacklisted =
-        await this.redisTokenRepository.isTokenBlacklisted(token);
-      if (isBlacklisted) {
-        throw new UnauthorizedException('Token has been revoked');
-      }
-      request.token = token;
+    if (!token) {
+      throw new UnauthorizedException('Invalid authorization token format');
     }
+
+    const isBlacklisted =
+      await this.redisTokenRepository.isTokenBlacklisted(token);
+    if (isBlacklisted) {
+      throw new UnauthorizedException('Token has been revoked');
+    }
+    request.token = token;
 
     return true;
   }
@@ -50,13 +52,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     if (!authHeader) {
       return null;
     }
-    const parts = authHeader.split(' ');
-    if (parts.length === 2) {
-      const [scheme, token] = parts;
-      if (scheme === TOKEN_AUTH_SCHEME || scheme === BEARER_AUTH_SCHEME) {
-        return token;
-      }
-    }
-    return null;
+    const tokenMatch = authHeader.match(/^(?:Token|Bearer)\s+(\S+)$/i);
+    return tokenMatch ? tokenMatch[1] : null;
   }
 }
+
+

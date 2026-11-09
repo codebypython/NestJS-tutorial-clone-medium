@@ -1,7 +1,9 @@
 import {
   Injectable,
+  Logger,
   UnprocessableEntityException,
 } from '@nestjs/common';
+
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
@@ -16,6 +18,8 @@ import { JwtPayload } from './strategies/jwt.strategy';
 export const BCRYPT_SALT_ROUNDS = 10;
 export const SECONDS_CONVERSION_DIVISOR = 1000;
 export const DEFAULT_JWT_EXPIRY = '24h';
+export const MYSQL_DUP_ENTRY_CODE = 'ER_DUP_ENTRY';
+export const MYSQL_DUP_ENTRY_ERRNO = 1062;
 
 @Injectable()
 export class AuthService {
@@ -27,7 +31,11 @@ export class AuthService {
   ) {}
 
   async register(createUserDto: CreateUserDto): Promise<UserResponseDto> {
-    const { email, username, password } = createUserDto.user;
+    const rawEmail = createUserDto.user.email;
+    const rawUsername = createUserDto.user.username;
+    const password = createUserDto.user.password;
+    const email = rawEmail.toLowerCase().trim();
+    const username = rawUsername.trim();
 
     const existingUserByEmail = await this.usersService.findByEmail(email);
     const existingUserByUsername =
@@ -52,18 +60,94 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 
-    const createdUser = await this.usersService.create({
-      email,
-      username,
-      passwordHash,
-    });
+    let createdUser: User;
+    try {
+      createdUser = await this.usersService.create({
+        email,
+        username,
+        passwordHash,
+      });
+    } catch (err: unknown) {
+      const errorObj = err as {
+        name?: string;
+        code?: string;
+        errno?: number;
+        message?: string;
+        driverError?: { code?: string; errno?: number; message?: string };
+      };
+
+      const isDuplicateError =
+        errorObj.code === MYSQL_DUP_ENTRY_CODE ||
+        errorObj.errno === MYSQL_DUP_ENTRY_ERRNO ||
+        errorObj.driverError?.code === MYSQL_DUP_ENTRY_CODE ||
+        errorObj.driverError?.errno === MYSQL_DUP_ENTRY_ERRNO ||
+        (typeof errorObj.message === 'string' &&
+          errorObj.message.includes('Duplicate entry'));
+
+      if (isDuplicateError) {
+        const fullMessage = `${errorObj.message ?? ''} ${errorObj.driverError?.message ?? ''}`;
+        const isEmailConflict =
+          fullMessage.includes('IDX_users_email') ||
+          fullMessage.includes(email);
+        const isUsernameConflict =
+          fullMessage.includes('IDX_users_username') ||
+          fullMessage.includes(username);
+
+        const conflictErrors: Record<string, string[]> = {};
+        if (isEmailConflict) {
+          conflictErrors.email = ['has already been taken'];
+        }
+        if (isUsernameConflict) {
+          conflictErrors.username = ['has already been taken'];
+        }
+        if (Object.keys(conflictErrors).length === 0) {
+          conflictErrors.email = ['has already been taken'];
+        }
+
+        Logger.warn(
+          {
+            message:
+              'Database duplicate constraint conflict handled and mapped to HTTP 422',
+            explanation:
+              'A unique index collision occurred during record persistence',
+            guidance:
+              'The request was rejected with HTTP 422 Unprocessable Entity for client resolution',
+          },
+          'AuthService',
+        );
+
+        throw new UnprocessableEntityException({
+          errors: conflictErrors,
+        });
+      }
+
+      const fatalError = err instanceof Error ? err : new Error(String(err));
+      Logger.error(
+        {
+          message: 'Unhandled database error during user persistence',
+          explanation:
+            'The database layer failed to insert the new user record',
+          guidance: 'Verify database connectivity and schema integrity',
+          errorName: fatalError.name,
+          errorMessage: fatalError.message,
+        },
+        'AuthService',
+      );
+      throw new UnprocessableEntityException({
+        errors: {
+          database: ['Registration failed due to a database persistence error'],
+        },
+      });
+    }
 
     const token = this.generateToken(createdUser);
     return this.buildUserResponse(createdUser, token);
   }
 
   async login(loginUserDto: LoginUserDto): Promise<UserResponseDto> {
-    const { email, password } = loginUserDto.user;
+    const rawEmail = loginUserDto.user.email;
+    const password = loginUserDto.user.password;
+    const email = rawEmail.toLowerCase().trim();
 
     const user = await this.usersService.findByEmail(email);
     if (!user) {
@@ -106,6 +190,8 @@ export class AuthService {
       );
     }
   }
+
+
 
   buildUserResponse(user: User, token?: string): UserResponseDto {
     return {

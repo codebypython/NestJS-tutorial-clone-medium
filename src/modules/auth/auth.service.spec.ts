@@ -1,5 +1,7 @@
 import { UnprocessableEntityException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+
+
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as bcrypt from 'bcryptjs';
@@ -186,7 +188,39 @@ describe('AuthService', () => {
         expect(response.errors.username).toEqual(['has already been taken']);
       }
     });
+
+    it('should catch database unique constraint collision (ER_DUP_ENTRY) during creation and map to 422', async () => {
+      usersService.findByEmail.mockResolvedValue(null);
+      usersService.findByUsername.mockResolvedValue(null);
+      const duplicateError = new Error(
+        "Duplicate entry 'jake@jake.jake' for key 'users.IDX_users_email'",
+      ) as Error & { code: string; errno: number };
+      duplicateError.code = 'ER_DUP_ENTRY';
+      duplicateError.errno = 1062;
+      usersService.create.mockRejectedValue(duplicateError);
+
+      const registerDto = {
+        user: {
+          email: 'jake@jake.jake',
+          username: 'Jacob',
+          password: 'plainpassword123',
+        },
+      };
+
+      await expect(service.register(registerDto)).rejects.toThrow(
+        UnprocessableEntityException,
+      );
+
+      try {
+        await service.register(registerDto);
+      } catch (err: unknown) {
+        const error = err as UnprocessableEntityException;
+        const response = error.getResponse() as { errors: Record<string, string[]> };
+        expect(response.errors.email).toEqual(['has already been taken']);
+      }
+    });
   });
+
 
   describe('login', () => {
     it('should authenticate user and return token when credentials are valid', async () => {
@@ -278,6 +312,8 @@ describe('AuthService', () => {
       expect(redisTokenRepository.setBlacklistToken).not.toHaveBeenCalled();
     });
   });
+
+
 
   describe('buildUserResponse', () => {
     it('should use provided token when passed', () => {

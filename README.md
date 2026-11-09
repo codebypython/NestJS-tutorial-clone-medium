@@ -245,12 +245,13 @@ npm run lint:eslint
 
 ### 5.7. Chay kiem thu tu dong
 ```bash
-# Chay Unit Test (4 suites, 29 tests)
+# Chay Unit Test (4 suites, 30 tests)
 npm test
 
-# Chay E2E Integration Test (2 suites, 16 tests)
+# Chay E2E Integration Test (2 suites, 19 tests)
 npm run test:e2e
 ```
+
 
 --------------------------------------------------------------------------------
 
