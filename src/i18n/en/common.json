@@ -1,0 +1,5 @@
+{
+  "greeting": "Welcome to Conduit RealWorld API",
+  "status": "System operational",
+  "description": "Enterprise-grade NestJS backend implementation adhering to Google TypeScript Style Guide."
+}
