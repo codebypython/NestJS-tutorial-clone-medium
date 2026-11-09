@@ -87,8 +87,8 @@ Pull Request 2 trien khai toan dien ha tang quan ly phien ban co so du lieu thu 
    - Tuan thu Google TypeScript Style Guide: strict typing, khong su dung kieu any, dat ten bien va ham ro rang theo semantic.
 
 7. Kiem thu tu dong (Automated Testing):
-   - Unit Test: 4/4 test suites vuot qua thanh cong (29/29 tests pass).
-   - E2E Integration Test: 2/2 suites vuot qua thanh cong (16/16 tests pass, bao gom toan bo kich ban Auth: dang ky hop le/trung lap/sai dinh dang, dang nhap dung/sai, get current user co/khong token, va dang xuat / token blacklist).
+   - Unit Test: 4/4 test suites vuot qua thanh cong (30/30 tests pass).
+   - E2E Integration Test: 2/2 suites vuot qua thanh cong (19/19 tests pass, bao gom toan bo kich ban Auth: dang ky hop le/trung lap/sai dinh dang/race condition, dang nhap dung/sai, get current user co/khong token, va dang xuat / token blacklist tren ca scheme Token va Bearer).
 
 --------------------------------------------------------------------------------
 
