@@ -25,6 +25,10 @@ import { AttachmentsModule } from './modules/attachments/attachments.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath:
+        process.env.NODE_ENV === 'test'
+          ? ['.env.test', '.env']
+          : ['.env'],
       load: [configuration],
     }),
     I18nModule.forRootAsync({

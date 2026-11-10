@@ -22,7 +22,9 @@ describe('Application Endpoints (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   it('/api/hello (GET) - Default English greeting', async () => {

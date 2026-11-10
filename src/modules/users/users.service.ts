@@ -31,12 +31,13 @@ export class UsersService {
   }
 
   async create(userData: CreateUserData): Promise<User> {
-    const newUser = this.userRepository.create();
-    newUser.email = userData.email;
-    newUser.username = userData.username;
-    newUser.password = userData.passwordHash;
-    newUser.bio = userData.bio ?? null;
-    newUser.image = userData.image ?? null;
+    const newUser = this.userRepository.create({
+      email: userData.email,
+      username: userData.username,
+      password: userData.passwordHash,
+      bio: userData.bio ?? null,
+      image: userData.image ?? null,
+    });
     return this.userRepository.save(newUser);
   }
 

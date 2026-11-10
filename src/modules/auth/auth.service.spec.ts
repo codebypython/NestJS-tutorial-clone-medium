@@ -1,4 +1,7 @@
-import { UnprocessableEntityException } from '@nestjs/common';
+import {
+  InternalServerErrorException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 
@@ -219,6 +222,25 @@ describe('AuthService', () => {
         expect(response.errors.email).toEqual(['has already been taken']);
       }
     });
+
+    it('should re-throw fatal database errors to trigger HTTP 500 filter', async () => {
+      usersService.findByEmail.mockResolvedValue(null);
+      usersService.findByUsername.mockResolvedValue(null);
+      const fatalError = new Error('Connection lost: MySQL daemon disappeared');
+      usersService.create.mockRejectedValue(fatalError);
+
+      const registerDto = {
+        user: {
+          email: 'jake@jake.jake',
+          username: 'Jacob',
+          password: 'plainpassword123',
+        },
+      };
+
+      await expect(service.register(registerDto)).rejects.toThrow(
+        InternalServerErrorException,
+      );
+    });
   });
 
 
@@ -322,14 +344,6 @@ describe('AuthService', () => {
 
       expect(result.user.token).toBe(explicitToken);
       expect(result.user.email).toBe(mockUser.email);
-    });
-
-    it('should generate new token when none provided', () => {
-      jwtService.sign.mockReturnValue(sampleToken);
-      const result = service.buildUserResponse(mockUser);
-
-      expect(result.user.token).toBe(sampleToken);
-      expect(jwtService.sign).toHaveBeenCalled();
     });
   });
 });

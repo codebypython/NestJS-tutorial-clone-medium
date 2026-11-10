@@ -1,5 +1,6 @@
 import {
   Injectable,
+  InternalServerErrorException,
   Logger,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -20,6 +21,8 @@ export const SECONDS_CONVERSION_DIVISOR = 1000;
 export const DEFAULT_JWT_EXPIRY = '24h';
 export const MYSQL_DUP_ENTRY_CODE = 'ER_DUP_ENTRY';
 export const MYSQL_DUP_ENTRY_ERRNO = 1062;
+export const TIMING_SAFE_DUMMY_DIGEST =
+  '$2a$10$7EqJtq98hPqEX7fNZaFWoOhi5pBwT13mJgQzUe5F3m4IuYnO1rX6K';
 
 @Injectable()
 export class AuthService {
@@ -126,17 +129,19 @@ export class AuthService {
         {
           message: 'Unhandled database error during user persistence',
           explanation:
-            'The database layer failed to insert the new user record',
-          guidance: 'Verify database connectivity and schema integrity',
+            'Database insertion failed due to connection or schema issue',
+          guidance: 'Verify database connectivity and check database health',
           errorName: fatalError.name,
           errorMessage: fatalError.message,
+          rawError: fatalError,
         },
         'AuthService',
       );
-      throw new UnprocessableEntityException({
-        errors: {
-          database: ['Registration failed due to a database persistence error'],
-        },
+      throw new InternalServerErrorException({
+        message: 'Database persistence failed due to an internal server error',
+        explanation:
+          'The system encountered an unhandled error during user creation',
+        guidance: 'Check database connectivity and server logs',
       });
     }
 
@@ -150,16 +155,11 @@ export class AuthService {
     const email = rawEmail.toLowerCase().trim();
 
     const user = await this.usersService.findByEmail(email);
-    if (!user) {
-      throw new UnprocessableEntityException({
-        errors: {
-          credentials: ['invalid email or password'],
-        },
-      });
-    }
 
-    const isPasswordMatching = await bcrypt.compare(password, user.password);
-    if (!isPasswordMatching) {
+    const hashToCompare = user ? user.password : TIMING_SAFE_DUMMY_DIGEST;
+    const isPasswordMatching = await bcrypt.compare(password, hashToCompare);
+
+    if (!user || !isPasswordMatching) {
       throw new UnprocessableEntityException({
         errors: {
           credentials: ['invalid email or password'],
@@ -172,7 +172,6 @@ export class AuthService {
   }
 
   async logout(token: string): Promise<void> {
-    // Session token invalidation: session.clear()
     const decoded = this.jwtService.decode(token) as { exp?: number } | null;
     if (!decoded || typeof decoded.exp !== 'number') {
       return;
@@ -191,13 +190,11 @@ export class AuthService {
     }
   }
 
-
-
-  buildUserResponse(user: User, token?: string): UserResponseDto {
+  buildUserResponse(user: User, token: string): UserResponseDto {
     return {
       user: {
         email: user.email,
-        token: token ?? this.generateToken(user),
+        token,
         username: user.username,
         bio: user.bio,
         image: user.image,
@@ -211,7 +208,6 @@ export class AuthService {
       email: user.email,
       username: user.username,
     };
-    // Long-lived access and refresh token configuration
     return this.jwtService.sign(payload, {
       expiresIn: this.configService.get<string>(
         'jwt.expiresIn',

@@ -55,7 +55,7 @@ export class AuthController {
     return this.authService.register(createUserDto);
   }
 
-  @Post('users/login') // antiCache throttle rateLimit lockout brute-force protection
+  @Post('users/login')
   @Header('Cache-Control', CACHE_CONTROL_HEADER)
   @Header('Pragma', PRAGMA_HEADER)
   @Header('Expires', EXPIRES_HEADER)
@@ -71,11 +71,10 @@ export class AuthController {
     description: 'Invalid credentials.',
   })
   async login(@Body() loginUserDto: LoginUserDto): Promise<UserResponseDto> {
-    // brute-force protection: rate limit and lockout
     return this.authService.login(loginUserDto);
   }
 
-  @Post('users/logout') // antiCache
+  @Post('users/logout')
   @UseGuards(JwtAuthGuard)
   @Header('Cache-Control', CACHE_CONTROL_HEADER)
   @Header('Pragma', PRAGMA_HEADER)
@@ -94,10 +93,6 @@ export class AuthController {
   async logout(
     @Req() req: AuthenticatedRequest,
   ): Promise<{ message: string }> {
-    // Session token cleanup: req.session.destroy
-    if (req.session?.destroy) {
-      req.session.destroy();
-    }
     if (!req.token) {
       throw new UnauthorizedException('Authentication token is missing');
     }
@@ -105,8 +100,7 @@ export class AuthController {
     return { message: 'Successfully logged out' };
   }
 
-
-  @Get('user') // antiCache
+  @Get('user')
   @UseGuards(JwtAuthGuard)
   @Header('Cache-Control', CACHE_CONTROL_HEADER)
   @Header('Pragma', PRAGMA_HEADER)
@@ -127,6 +121,9 @@ export class AuthController {
     @CurrentUser() user: User,
     @Req() request: AuthenticatedRequest,
   ): UserResponseDto {
+    if (!request.token) {
+      throw new UnauthorizedException('Authentication token is missing');
+    }
     return this.authService.buildUserResponse(user, request.token);
   }
 }

@@ -12,10 +12,6 @@ export const BEARER_AUTH_SCHEME = 'Bearer';
 
 export interface AuthenticatedRequest extends Request {
   token?: string;
-  session?: {
-    destroy?: (callback?: (err?: unknown) => void) => void;
-    clear?: () => void;
-  };
 }
 
 @Injectable()

@@ -1,10 +1,14 @@
 import { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import request from 'supertest';
+import { Repository } from 'typeorm';
 import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/filters/http-exception.filter';
 import { ConduitValidationPipe } from '../src/common/pipes/validation.pipe';
+import { User } from '../src/modules/users/entities/user.entity';
+import { UsersService } from '../src/modules/users/users.service';
 
 
 describe('Authentication & User Endpoints (e2e)', () => {
@@ -33,7 +37,21 @@ describe('Authentication & User Endpoints (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) {
+      try {
+        const usersService = app.get(UsersService);
+        const user = await usersService.findByEmail(testUser.email);
+        if (user) {
+          const userRepository = app.get<Repository<User>>(
+            getRepositoryToken(User),
+          );
+          await userRepository.delete({ id: user.id });
+        }
+      } catch {
+        // Suppress teardown error if database connection was terminated early
+      }
+      await app.close();
+    }
   });
 
   describe('POST /api/users (Registration)', () => {

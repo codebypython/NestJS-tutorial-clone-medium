@@ -114,13 +114,20 @@ describe('UsersService', () => {
         passwordHash: 'hashedpassword',
       };
 
-      const entityInstance = new User();
-      mockUserRepository.create.mockReturnValue(entityInstance);
+      mockUserRepository.create.mockImplementation((dto: Partial<User>) =>
+        Object.assign(new User(), dto),
+      );
       mockUserRepository.save.mockImplementation((saved: User) => Promise.resolve(saved));
 
       const result = await service.create(createInput);
 
-      expect(mockUserRepository.create).toHaveBeenCalled();
+      expect(mockUserRepository.create).toHaveBeenCalledWith({
+        email: createInput.email,
+        username: createInput.username,
+        password: createInput.passwordHash,
+        bio: null,
+        image: null,
+      });
       expect(result.email).toBe(createInput.email);
       expect(result.username).toBe(createInput.username);
       expect(result.password).toBe(createInput.passwordHash);
