@@ -1,25 +1,29 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import Redis from 'ioredis';
+import { REDIS_CLIENT } from './redis.constants';
 
 @Injectable()
-export class RedisService implements OnModuleInit, OnModuleDestroy {
-  constructor(private readonly configService: ConfigService) {}
+export class RedisService implements OnModuleDestroy {
+  constructor(
+    @Inject(REDIS_CLIENT)
+    private readonly redisClient: Redis,
+  ) {}
 
-  onModuleInit(): void {
-    const host = this.configService.get<string>('redis.host', 'localhost');
-    const port = this.configService.get<number>('redis.port', 6379);
-    Logger.log(`Redis module initialized for ${host}:${port}`, 'RedisService');
-  }
-
-  async setBlacklistToken(_token: string, _ttlSeconds: number): Promise<void> {
-    await Promise.resolve();
-  }
-
-  async isTokenBlacklisted(_token: string): Promise<boolean> {
-    return Promise.resolve(false);
-  }
-
-  onModuleDestroy(): void {
-    Logger.log('Redis module disconnected', 'RedisService');
+  async onModuleDestroy(): Promise<void> {
+    try {
+      await this.redisClient.quit();
+      Logger.log('Redis client disconnected', 'RedisService');
+    } catch (err: unknown) {
+      const errorObj = err instanceof Error ? err : new Error(String(err));
+      Logger.warn(
+        {
+          message: 'Redis disconnection failure',
+          errorName: errorObj.name,
+          errorMessage: errorObj.message,
+          stackTrace: errorObj.stack,
+        },
+        'RedisService',
+      );
+    }
   }
 }

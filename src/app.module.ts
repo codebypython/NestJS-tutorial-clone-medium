@@ -10,6 +10,7 @@ import {
 import * as path from 'path';
 
 import { configuration } from './config/configuration';
+import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './modules/health/health.module';
 import { RedisModule } from './modules/redis/redis.module';
 import { UsersModule } from './modules/users/users.module';
@@ -24,6 +25,10 @@ import { AttachmentsModule } from './modules/attachments/attachments.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath:
+        process.env.NODE_ENV === 'test'
+          ? ['.env.test', '.env']
+          : ['.env'],
       load: [configuration],
     }),
     I18nModule.forRootAsync({
@@ -43,6 +48,7 @@ import { AttachmentsModule } from './modules/attachments/attachments.module';
         new AcceptLanguageResolver(),
       ],
     }),
+    DatabaseModule,
     HealthModule,
     RedisModule,
     UsersModule,

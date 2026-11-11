@@ -8,13 +8,23 @@ import {
 } from '@nestjs/common';
 import { ValidationError } from 'class-validator';
 
-function formatValidationErrors(errors: ValidationError[]): UnprocessableEntityException {
-  const formattedErrors: Record<string, string[]> = {};
+function collectValidationErrors(
+  errors: ValidationError[],
+  target: Record<string, string[]> = {},
+): Record<string, string[]> {
   for (const err of errors) {
     if (err.constraints) {
-      formattedErrors[err.property] = Object.values(err.constraints);
+      target[err.property] = Object.values(err.constraints);
+    }
+    if (err.children && err.children.length > 0) {
+      collectValidationErrors(err.children, target);
     }
   }
+  return target;
+}
+
+function formatValidationErrors(errors: ValidationError[]): UnprocessableEntityException {
+  const formattedErrors = collectValidationErrors(errors);
   return new UnprocessableEntityException({
     errors: formattedErrors,
   });
