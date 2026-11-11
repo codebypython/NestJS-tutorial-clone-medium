@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ServeStaticModule } from '@nestjs/serve-static';
 import {
   AcceptLanguageResolver,
   HeaderResolver,
@@ -30,6 +31,13 @@ import { AttachmentsModule } from './modules/attachments/attachments.module';
           ? ['.env.test', '.env']
           : ['.env'],
       load: [configuration],
+    }),
+    ServeStaticModule.forRoot({
+      rootPath: path.join(process.cwd(), 'public'),
+      serveRoot: '/public',
+      serveStaticOptions: {
+        index: false,
+      },
     }),
     I18nModule.forRootAsync({
       imports: [ConfigModule],

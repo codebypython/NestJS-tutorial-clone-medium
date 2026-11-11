@@ -19,6 +19,9 @@ export interface AppConfig {
     secret: string;
     expiresIn: string;
   };
+  upload: {
+    destination: string;
+  };
 }
 
 export class ConfigurationException extends Error {
@@ -56,6 +59,9 @@ export const configuration = (): AppConfig => {
     jwt: {
       secret: jwtSecret ?? '',
       expiresIn: process.env.JWT_EXPIRES_IN ?? '24h',
+    },
+    upload: {
+      destination: process.env.UPLOAD_DESTINATION ?? 'public/uploads/avatars',
     },
   };
 };

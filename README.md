@@ -92,7 +92,48 @@ Pull Request 2 trien khai toan dien ha tang quan ly phien ban co so du lieu thu 
 
 --------------------------------------------------------------------------------
 
-## 4. Cau truc thu muc ma nguon
+## 4. Ket qua hoan thanh trong Pull Request 3 (User APIs, Social Profiles & Polymorphic Attachments)
+
+Pull Request 3 hoan thien toan bo cac API con lai cua User, he thong ho so ca nhan mang xa hoi, va kien truc quan ly tep tin dinh kem da hinh (Polymorphic Attachments):
+
+1. Kien truc CSDL va Migration thu cong cho Pull 3:
+   - Migration `1794215000000-CreateFollowsAndAttachmentsTables.ts` khoi tao 2 bang:
+     - Bang `follows`: composite primary key (`follower_id`, `following_id`), rang buoc khoa ngoai voi `users` kem theo `ON DELETE CASCADE`.
+     - Bang `attachments`: thiet ke theo mo hinh da hinh (`target_type`, `target_id`), khoa chinh UUIDv4 chong tan cong vet can tai nguyen (IDOR).
+   - Khoi tao 2 Entity TypeORM: `Follow` va `Attachment`.
+
+2. Module quan ly tap tin da hinh (Attachments Module & Local Upload):
+   - Cau hinh `ServeStaticModule` phuc vu tep tinh truc tiep tu `public/uploads/avatars/`, bao ve thu muc bang `index: false`.
+   - Vong doi `onModuleInit` tu dong tao cay thu muc de quy tren dia va kiem tra quyen ghi, loai bo nguy co crash runtime `ENOENT`.
+   - Endpoint `POST /api/attachments/avatar`:
+     - Nhan `multipart/form-data`, gioi han kich thuoc file <= 2MB, kiem tra MIME types hop le (`image/jpeg`, `image/png`, `image/webp`).
+     - Sinh ten UUIDv4 ngau nhien chong Path Traversal.
+     - Co che Transactional Safety: Neu luu database loi, tu dong xoa tep vat ly tren dia (rollback) va bao loi; chi don dep tep avatar cu (orphan cleanup) sau khi commit DB thanh cong.
+
+3. Module Nguoi dung (Users Module & `PUT /api/user`):
+   - Tach rieng `UsersController` quan ly route `/api/user`, phan dinh ranh gioi voi `AuthController` (chuyen trach session login/register).
+   - Endpoint `GET /api/user`: Tra ve thong tin user hien tai qua `JwtAuthGuard`.
+   - Endpoint `PUT /api/user`: Cap nhat partial `email`, `username`, `password`, `image`, `bio`.
+     - Rang buoc DTO nghiem ngat: username 3-50 ky tu, password 8-64 ky tu (chong CPU DoS bcrypt), image <= 500 ky tu.
+     - Kiem tra trung lap email va username voi tai khoan khac (tra ve HTTP 422).
+     - Tu dong bam lai mat khau bang `bcryptjs` salt 10 rounds.
+
+4. Module Ho so ca nhan & Theo doi mang xa hoi (Profiles Module):
+   - `OptionalJwtAuthGuard`: Xu ly xac thuc khong bat buoc, neu co token van kiem tra Redis blacklist, neu khong co token coi nhu khach vang lai khong nem 401.
+   - Endpoint `GET /api/profiles/:username`: Tra ve profile tac gia kem co `following: boolean`.
+   - Endpoint `POST /api/profiles/:username/follow`: Chan tu follow chinh minh (HTTP 422 `{ errors: { user: ['cannot follow yourself'] } }`), co che idempotent khong gay duplicate key.
+   - Endpoint `DELETE /api/profiles/:username/follow`: Huy theo doi idempotent, tra ve `following: false`.
+
+5. Kiem soat chat luong ma nguon va phong ve (Hardening & Quality Gate):
+   - Loai bo test tampering trong `optional-jwt-auth.guard.spec.ts`, su dung prototype spy thuc chat tren Passport AuthGuard.
+   - `AllExceptionsFilter` phan loai chuan xac `MulterError`: chi `LIMIT_FILE_SIZE` tra 413, cac ma Multer khac tra 422.
+   - Unit Test: **11/11 test suites passed**, **86/86 unit tests passed** (`exit code: 0`).
+   - SunLint Compliance: 0 errors across 49 files (`exit code: 0`).
+   - Production Build: `nest build` bien dich hoan toan khong loi (`exit code: 0`).
+
+--------------------------------------------------------------------------------
+
+## 5. Cau truc thu muc ma nguon
 
 ```text
 NestJS tutorials/
