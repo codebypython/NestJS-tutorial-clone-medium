@@ -8,6 +8,8 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 
+export const MULTER_LIMIT_FILE_SIZE = 'LIMIT_FILE_SIZE';
+
 interface ConduitErrorResponse {
   errors: Record<string, string[]>;
 }
@@ -42,6 +44,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
           errorBody = { message: [exception.message] };
         }
       }
+    } else if (
+      exception instanceof Error &&
+      exception.name === 'MulterError'
+    ) {
+      const multerErr = exception as { code?: string; message: string };
+      if (multerErr.code === MULTER_LIMIT_FILE_SIZE) {
+        status = HttpStatus.PAYLOAD_TOO_LARGE;
+      } else {
+        status = HttpStatus.UNPROCESSABLE_ENTITY;
+      }
+      errorBody = { file: [exception.message] };
     } else if (exception instanceof Error) {
       Logger.error(`Unhandled Exception: ${exception.message}`, exception.stack, 'AllExceptionsFilter');
       errorBody = { error: [exception.message] };

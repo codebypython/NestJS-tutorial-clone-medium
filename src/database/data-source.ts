@@ -1,6 +1,8 @@
 import { DataSource, DataSourceOptions } from 'typeorm';
 import * as dotenv from 'dotenv';
 import { User } from '../modules/users/entities/user.entity';
+import { Follow } from '../modules/profiles/entities/follow.entity';
+import { Attachment } from '../modules/attachments/entities/attachment.entity';
 
 dotenv.config();
 
@@ -13,7 +15,7 @@ export const dataSourceOptions: DataSourceOptions = {
   username: process.env.DB_USERNAME ?? 'root',
   password: process.env.DB_PASSWORD ?? 'root',
   database: process.env.DB_DATABASE ?? 'conduit_db',
-  entities: [User, 'dist/**/*.entity.js'],
+  entities: [User, Follow, Attachment, 'dist/**/*.entity.js'],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,
   logging: process.env.NODE_ENV === 'development',
