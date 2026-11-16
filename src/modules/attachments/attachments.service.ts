@@ -2,15 +2,18 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
-  PayloadTooLargeException,
-  UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Repository } from 'typeorm';
+import { LessThan, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  DEFAULT_AVATAR_UPLOAD_DIR,
+  DEFAULT_AVATAR_URL_PREFIX,
+  resolveUploadDestination,
+} from '../../common/utils/upload-path.util';
 import { User } from '../users/entities/user.entity';
 import { AttachmentResponseDto } from './dto/attachment-response.dto';
 import {
@@ -30,8 +33,6 @@ export const MIME_TO_EXTENSION_MAP: Record<string, string> = {
   'image/png': '.png',
   'image/webp': '.webp',
 };
-export const DEFAULT_AVATAR_UPLOAD_DIR = 'public/uploads/avatars';
-export const PUBLIC_AVATAR_URL_PREFIX = '/public/uploads/avatars';
 
 @Injectable()
 export class AttachmentsService {
@@ -45,24 +46,6 @@ export class AttachmentsService {
     user: User,
     file: Express.Multer.File,
   ): Promise<AttachmentResponseDto> {
-    const isAllowedMime = ALLOWED_AVATAR_MIME_TYPES.includes(file.mimetype);
-    if (!isAllowedMime) {
-      throw new UnprocessableEntityException({
-        errors: {
-          file: [
-            `Invalid file type. Allowed types: ${ALLOWED_AVATAR_MIME_TYPES.join(', ')}`,
-          ],
-        },
-      });
-    }
-
-    const hasExceededSize = file.size > MAX_AVATAR_FILE_SIZE;
-    if (hasExceededSize) {
-      throw new PayloadTooLargeException({
-        errors: { file: ['file size exceeds 2MB limit'] },
-      });
-    }
-
     const originalExt = path.extname(file.originalname).toLowerCase();
     const isAllowedExt = ALLOWED_AVATAR_EXTENSIONS.includes(originalExt);
     const safeExt = isAllowedExt
@@ -76,35 +59,42 @@ export class AttachmentsService {
       'upload.destination',
       DEFAULT_AVATAR_UPLOAD_DIR,
     );
-    const destinationDir = path.isAbsolute(uploadDestination)
-      ? uploadDestination
-      : path.join(process.cwd(), uploadDestination);
-
-    const hasExistingDir = fs.existsSync(destinationDir);
-    if (!hasExistingDir) {
-      fs.mkdirSync(destinationDir, { recursive: true });
-    }
-
+    const urlPrefix = this.configService.get<string>(
+      'upload.urlPrefix',
+      DEFAULT_AVATAR_URL_PREFIX,
+    );
+    const destinationDir = resolveUploadDestination(uploadDestination);
     const storagePath = path.join(destinationDir, safeFileName);
 
     await fs.promises.writeFile(storagePath, file.buffer);
 
-    const publicUrl = `${PUBLIC_AVATAR_URL_PREFIX}/${safeFileName}`;
-
-    const attachment = this.attachmentRepository.create({
-      id: fileId,
-      targetType: AttachmentTargetType.USER,
-      targetId: user.id,
-      fileName: safeFileName,
-      fileType: file.mimetype,
-      fileSize: file.size,
-      storagePath,
-      url: publicUrl,
-    });
+    const publicUrl = `${urlPrefix}/${safeFileName}`;
 
     let savedAttachment: Attachment;
     try {
-      savedAttachment = await this.attachmentRepository.save(attachment);
+      savedAttachment = await this.attachmentRepository.manager.transaction(
+        async (manager) => {
+          const txAttachmentRepo = manager.getRepository(Attachment);
+          const txUserRepo = manager.getRepository(User);
+
+          const attachment = txAttachmentRepo.create({
+            id: fileId,
+            targetType: AttachmentTargetType.USER,
+            targetId: user.id,
+            fileName: safeFileName,
+            fileType: file.mimetype,
+            fileSize: file.size,
+            storagePath,
+            url: publicUrl,
+          });
+
+          const persisted = await txAttachmentRepo.save(attachment);
+          await txUserRepo.update({ id: user.id }, { image: publicUrl });
+          user.image = publicUrl;
+
+          return persisted;
+        },
+      );
     } catch (dbError: unknown) {
       // Rollback newly written file if database persistence fails
       try {
@@ -115,8 +105,10 @@ export class AttachmentsService {
       } catch (unlinkErr) {
         Logger.warn(
           {
-            message: 'Failed to clean up newly written avatar file after DB failure',
-            explanation: 'The temporary avatar file could not be unlinked after DB save error',
+            message:
+              'Failed to clean up newly written avatar file after DB failure',
+            explanation:
+              'The temporary avatar file could not be unlinked after DB save error',
             guidance: 'Check filesystem permissions and disk status',
             error: String(unlinkErr),
             storagePath,
@@ -129,7 +121,8 @@ export class AttachmentsService {
         dbError instanceof Error ? dbError : new Error(String(dbError));
       Logger.error(
         {
-          message: 'Unhandled database error during avatar attachment persistence',
+          message:
+            'Unhandled database error during avatar attachment persistence',
           explanation: 'Failed to persist attachment metadata to database',
           guidance: 'Verify database connectivity and schema health',
           errorName: fatalError.name,
@@ -145,17 +138,20 @@ export class AttachmentsService {
       });
     }
 
-    // Only perform orphan cleanup after new attachment is safely persisted in DB
+    // Only clean up attachments created strictly before the newly saved attachment
     try {
-      const previousAttachments = await this.attachmentRepository.find({
+      const candidateAttachments = await this.attachmentRepository.find({
         where: {
           targetType: AttachmentTargetType.USER,
           targetId: user.id,
+          createdAt: LessThan(savedAttachment.createdAt),
         },
       });
 
-      const oldAttachments = previousAttachments.filter(
-        (att) => att.id !== savedAttachment.id,
+      const oldAttachments = candidateAttachments.filter(
+        (att) =>
+          att.id !== savedAttachment.id &&
+          att.createdAt < savedAttachment.createdAt,
       );
 
       for (const prev of oldAttachments) {

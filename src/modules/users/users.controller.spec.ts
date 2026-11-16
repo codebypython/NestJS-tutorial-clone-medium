@@ -1,6 +1,5 @@
-import { UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { AuthenticatedRequest } from '../auth/guards/jwt-auth.guard';
+import { GuaranteedAuthRequest } from '../auth/guards/jwt-auth.guard';
 import { User } from './entities/user.entity';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
@@ -49,7 +48,7 @@ describe('UsersController', () => {
     it('should return current user with token', () => {
       const mockRequest = {
         token: 'active-jwt-token-xyz',
-      } as AuthenticatedRequest;
+      } as GuaranteedAuthRequest;
 
       const result = controller.getCurrentUser(mockUser, mockRequest);
 
@@ -62,14 +61,6 @@ describe('UsersController', () => {
           image: mockUser.image,
         },
       });
-    });
-
-    it('should throw UnauthorizedException when token is missing from request', () => {
-      const mockRequest = {} as AuthenticatedRequest;
-
-      expect(() => controller.getCurrentUser(mockUser, mockRequest)).toThrow(
-        UnauthorizedException,
-      );
     });
   });
 
@@ -84,7 +75,7 @@ describe('UsersController', () => {
 
       const mockRequest = {
         token: 'active-jwt-token-xyz',
-      } as AuthenticatedRequest;
+      } as GuaranteedAuthRequest;
 
       const result = await controller.updateCurrentUser(
         mockUser,
@@ -117,7 +108,7 @@ describe('UsersController', () => {
 
       const mockRequest = {
         token: 'active-jwt-token-xyz',
-      } as AuthenticatedRequest;
+      } as GuaranteedAuthRequest;
 
       const result = await controller.updateCurrentUser(
         mockUser,
@@ -127,18 +118,6 @@ describe('UsersController', () => {
 
       expect(mockUsersService.update).toHaveBeenCalledWith(mockUser.id, {});
       expect(result.user.email).toBe(mockUser.email);
-    });
-
-    it('should throw UnauthorizedException when token is missing during update', async () => {
-      const mockRequest = {} as AuthenticatedRequest;
-
-      await expect(
-        controller.updateCurrentUser(
-          mockUser,
-          { user: { bio: 'New bio' } },
-          mockRequest,
-        ),
-      ).rejects.toThrow(UnauthorizedException);
     });
   });
 });

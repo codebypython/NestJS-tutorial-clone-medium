@@ -6,7 +6,6 @@ import {
   HttpStatus,
   Post,
   Req,
-  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -21,7 +20,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { LoginUserDto } from './dto/login-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import {
-  AuthenticatedRequest,
+  GuaranteedAuthRequest,
   JwtAuthGuard,
 } from './guards/jwt-auth.guard';
 
@@ -88,11 +87,8 @@ export class AuthController {
     description: 'Authentication token is missing, invalid, or expired.',
   })
   async logout(
-    @Req() req: AuthenticatedRequest,
+    @Req() req: GuaranteedAuthRequest,
   ): Promise<{ message: string }> {
-    if (!req.token) {
-      throw new UnauthorizedException('Authentication token is missing');
-    }
     await this.authService.logout(req.token);
     return { message: 'Successfully logged out' };
   }

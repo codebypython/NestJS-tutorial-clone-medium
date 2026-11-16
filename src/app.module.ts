@@ -11,6 +11,11 @@ import {
 import * as path from 'path';
 
 import { configuration } from './config/configuration';
+import {
+  DEFAULT_AVATAR_UPLOAD_DIR,
+  DEFAULT_AVATAR_URL_PREFIX,
+  resolveUploadDestination,
+} from './common/utils/upload-path.util';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './modules/health/health.module';
 import { RedisModule } from './modules/redis/redis.module';
@@ -32,11 +37,27 @@ import { AttachmentsModule } from './modules/attachments/attachments.module';
           : ['.env'],
       load: [configuration],
     }),
-    ServeStaticModule.forRoot({
-      rootPath: path.join(process.cwd(), 'public'),
-      serveRoot: '/public',
-      serveStaticOptions: {
-        index: false,
+    ServeStaticModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const uploadDestination = configService.get<string>(
+          'upload.destination',
+          DEFAULT_AVATAR_UPLOAD_DIR,
+        );
+        const urlPrefix = configService.get<string>(
+          'upload.urlPrefix',
+          DEFAULT_AVATAR_URL_PREFIX,
+        );
+        return [
+          {
+            rootPath: resolveUploadDestination(uploadDestination),
+            serveRoot: urlPrefix,
+            serveStaticOptions: {
+              index: false,
+            },
+          },
+        ];
       },
     }),
     I18nModule.forRootAsync({

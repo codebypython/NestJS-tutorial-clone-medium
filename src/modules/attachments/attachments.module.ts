@@ -2,13 +2,13 @@ import { Logger, Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import * as fs from 'fs';
-import * as path from 'path';
+import {
+  DEFAULT_AVATAR_UPLOAD_DIR,
+  resolveUploadDestination,
+} from '../../common/utils/upload-path.util';
 import { AuthModule } from '../auth/auth.module';
 import { AttachmentsController } from './attachments.controller';
-import {
-  AttachmentsService,
-  DEFAULT_AVATAR_UPLOAD_DIR,
-} from './attachments.service';
+import { AttachmentsService } from './attachments.service';
 import { Attachment } from './entities/attachment.entity';
 
 @Module({
@@ -29,9 +29,7 @@ export class AttachmentsModule implements OnModuleInit {
       'upload.destination',
       DEFAULT_AVATAR_UPLOAD_DIR,
     );
-    const uploadDir = path.isAbsolute(uploadDestination)
-      ? uploadDestination
-      : path.join(process.cwd(), uploadDestination);
+    const uploadDir = resolveUploadDestination(uploadDestination);
 
     const hasUploadDir = fs.existsSync(uploadDir);
     if (!hasUploadDir) {

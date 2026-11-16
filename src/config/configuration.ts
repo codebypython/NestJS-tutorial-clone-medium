@@ -1,3 +1,8 @@
+import {
+  DEFAULT_AVATAR_UPLOAD_DIR,
+  deriveUploadUrlPrefix,
+} from '../common/utils/upload-path.util';
+
 export interface AppConfig {
   port: number;
   environment: string;
@@ -21,6 +26,7 @@ export interface AppConfig {
   };
   upload: {
     destination: string;
+    urlPrefix: string;
   };
 }
 
@@ -61,7 +67,11 @@ export const configuration = (): AppConfig => {
       expiresIn: process.env.JWT_EXPIRES_IN ?? '24h',
     },
     upload: {
-      destination: process.env.UPLOAD_DESTINATION ?? 'public/uploads/avatars',
+      destination:
+        process.env.UPLOAD_DESTINATION ?? DEFAULT_AVATAR_UPLOAD_DIR,
+      urlPrefix: deriveUploadUrlPrefix(
+        process.env.UPLOAD_DESTINATION ?? DEFAULT_AVATAR_UPLOAD_DIR,
+      ),
     },
   };
 };

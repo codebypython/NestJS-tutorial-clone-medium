@@ -7,7 +7,6 @@ import {
   HttpStatus,
   Put,
   Req,
-  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -20,7 +19,7 @@ import { AUTH_SCHEME } from '../../common/constants';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserResponseDto } from '../auth/dto/user-response.dto';
 import {
-  AuthenticatedRequest,
+  GuaranteedAuthRequest,
   JwtAuthGuard,
 } from '../auth/guards/jwt-auth.guard';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -51,11 +50,8 @@ export class UsersController {
   })
   getCurrentUser(
     @CurrentUser() user: User,
-    @Req() request: AuthenticatedRequest,
+    @Req() request: GuaranteedAuthRequest,
   ): UserResponseDto {
-    if (!request.token) {
-      throw new UnauthorizedException('Authentication token is missing');
-    }
     return {
       user: {
         email: user.email,
@@ -91,11 +87,8 @@ export class UsersController {
   async updateCurrentUser(
     @CurrentUser() user: User,
     @Body() updateUserDto: UpdateUserDto,
-    @Req() request: AuthenticatedRequest,
+    @Req() request: GuaranteedAuthRequest,
   ): Promise<UserResponseDto> {
-    if (!request.token) {
-      throw new UnauthorizedException('Authentication token is missing');
-    }
     const updatedUser = await this.usersService.update(
       user.id,
       updateUserDto?.user ?? {},

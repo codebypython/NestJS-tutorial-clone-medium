@@ -9,6 +9,10 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { RedisTokenRepository } from '../redis/repositories/redis-token.repository';
+import {
+  extractDatabaseErrorMessage,
+  isDuplicateEntryError,
+} from '../../common/utils/database-error.util';
 import { User } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -19,8 +23,6 @@ import { JwtPayload } from './strategies/jwt.strategy';
 export const BCRYPT_SALT_ROUNDS = 10;
 export const SECONDS_CONVERSION_DIVISOR = 1000;
 export const DEFAULT_JWT_EXPIRY = '24h';
-export const MYSQL_DUP_ENTRY_CODE = 'ER_DUP_ENTRY';
-export const MYSQL_DUP_ENTRY_ERRNO = 1062;
 export const TIMING_SAFE_DUMMY_DIGEST =
   '$2a$10$7EqJtq98hPqEX7fNZaFWoOhi5pBwT13mJgQzUe5F3m4IuYnO1rX6K';
 
@@ -71,30 +73,10 @@ export class AuthService {
         passwordHash,
       });
     } catch (err: unknown) {
-      const errorObj = err as {
-        name?: string;
-        code?: string;
-        errno?: number;
-        message?: string;
-        driverError?: { code?: string; errno?: number; message?: string };
-      };
-
-      const isDuplicateError =
-        errorObj.code === MYSQL_DUP_ENTRY_CODE ||
-        errorObj.errno === MYSQL_DUP_ENTRY_ERRNO ||
-        errorObj.driverError?.code === MYSQL_DUP_ENTRY_CODE ||
-        errorObj.driverError?.errno === MYSQL_DUP_ENTRY_ERRNO ||
-        (typeof errorObj.message === 'string' &&
-          errorObj.message.includes('Duplicate entry'));
-
-      if (isDuplicateError) {
-        const fullMessage = `${errorObj.message ?? ''} ${errorObj.driverError?.message ?? ''}`;
-        const isEmailConflict =
-          fullMessage.includes('IDX_users_email') ||
-          fullMessage.includes(email);
-        const isUsernameConflict =
-          fullMessage.includes('IDX_users_username') ||
-          fullMessage.includes(username);
+      if (isDuplicateEntryError(err)) {
+        const fullMessage = extractDatabaseErrorMessage(err);
+        const isEmailConflict = fullMessage.includes('IDX_users_email');
+        const isUsernameConflict = fullMessage.includes('IDX_users_username');
 
         const conflictErrors: Record<string, string[]> = {};
         if (isEmailConflict) {
@@ -104,7 +86,7 @@ export class AuthService {
           conflictErrors.username = ['has already been taken'];
         }
         if (Object.keys(conflictErrors).length === 0) {
-          conflictErrors.email = ['has already been taken'];
+          conflictErrors.user = ['already exists'];
         }
 
         Logger.warn(

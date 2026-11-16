@@ -8,11 +8,13 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
 import { Repository } from 'typeorm';
+import {
+  extractDatabaseErrorMessage,
+  isDuplicateEntryError,
+} from '../../common/utils/database-error.util';
 import { User } from './entities/user.entity';
 
 export const BCRYPT_SALT_ROUNDS = 10;
-export const MYSQL_DUP_ENTRY_CODE = 'ER_DUP_ENTRY';
-export const MYSQL_DUP_ENTRY_ERRNO = 1062;
 
 export interface CreateUserData {
   readonly email: string;
@@ -105,7 +107,7 @@ export class UsersService {
       });
     }
 
-    if (updateData.password !== undefined && updateData.password.trim().length > 0) {
+    if (updateData.password !== undefined) {
       user.password = await bcrypt.hash(updateData.password, BCRYPT_SALT_ROUNDS);
     }
 
@@ -120,29 +122,10 @@ export class UsersService {
     try {
       return await this.userRepository.save(user);
     } catch (err: unknown) {
-      const errorObj = err as {
-        code?: string;
-        errno?: number;
-        message?: string;
-        driverError?: { code?: string; errno?: number; message?: string };
-      };
-
-      const isDuplicateError =
-        errorObj.code === MYSQL_DUP_ENTRY_CODE ||
-        errorObj.errno === MYSQL_DUP_ENTRY_ERRNO ||
-        errorObj.driverError?.code === MYSQL_DUP_ENTRY_CODE ||
-        errorObj.driverError?.errno === MYSQL_DUP_ENTRY_ERRNO ||
-        (typeof errorObj.message === 'string' &&
-          errorObj.message.includes('Duplicate entry'));
-
-      if (isDuplicateError) {
-        const fullMessage = `${errorObj.message ?? ''} ${errorObj.driverError?.message ?? ''}`;
-        const isEmailConflict =
-          fullMessage.includes('IDX_users_email') ||
-          (Boolean(updateData.email) && fullMessage.includes(updateData.email as string));
-        const isUsernameConflict =
-          fullMessage.includes('IDX_users_username') ||
-          (Boolean(updateData.username) && fullMessage.includes(updateData.username as string));
+      if (isDuplicateEntryError(err)) {
+        const fullMessage = extractDatabaseErrorMessage(err);
+        const isEmailConflict = fullMessage.includes('IDX_users_email');
+        const isUsernameConflict = fullMessage.includes('IDX_users_username');
 
         const conflictErrors: Record<string, string[]> = {};
         if (isEmailConflict) {
@@ -152,11 +135,7 @@ export class UsersService {
           conflictErrors.username = ['has already been taken'];
         }
         if (Object.keys(conflictErrors).length === 0) {
-          if (updateData.username && !updateData.email) {
-            conflictErrors.username = ['has already been taken'];
-          } else {
-            conflictErrors.email = ['has already been taken'];
-          }
+          conflictErrors.user = ['already exists'];
         }
 
         Logger.warn(

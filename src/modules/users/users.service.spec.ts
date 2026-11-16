@@ -6,7 +6,10 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { Repository } from 'typeorm';
+import { UpdateUserDataDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 import { User } from './entities/user.entity';
 
@@ -258,7 +261,31 @@ describe('UsersService', () => {
       ).rejects.toThrow(UnprocessableEntityException);
     });
 
-    it('should handle username duplicate race condition with generic message and attribute to username', async () => {
+    it('should map IDX_users_username duplicate race condition error to username field', async () => {
+      const currentUser = { ...mockUser };
+      mockUserRepository.findOneBy.mockImplementation((criteria: { id?: string }) => {
+        if (criteria.id === mockUser.id) return Promise.resolve(currentUser);
+        return Promise.resolve(null);
+      });
+      mockUserRepository.save.mockRejectedValue({
+        code: 'ER_DUP_ENTRY',
+        errno: 1062,
+        message: "Duplicate entry 'raceUser' for key 'users.IDX_users_username'",
+      });
+
+      try {
+        await service.update(mockUser.id, { username: 'raceUser' });
+        fail('Expected UnprocessableEntityException');
+      } catch (err) {
+        expect(err).toBeInstanceOf(UnprocessableEntityException);
+        const res = (err as UnprocessableEntityException).getResponse() as {
+          errors: Record<string, string[]>;
+        };
+        expect(res.errors.username).toEqual(['has already been taken']);
+      }
+    });
+
+    it('should not guess email/username when duplicate entry message lacks index name', async () => {
       const currentUser = { ...mockUser };
       mockUserRepository.findOneBy.mockImplementation((criteria: { id?: string }) => {
         if (criteria.id === mockUser.id) return Promise.resolve(currentUser);
@@ -278,8 +305,28 @@ describe('UsersService', () => {
         const res = (err as UnprocessableEntityException).getResponse() as {
           errors: Record<string, string[]>;
         };
-        expect(res.errors.username).toEqual(['has already been taken']);
+        expect(res.errors.user).toEqual(['already exists']);
+        expect(res.errors.email).toBeUndefined();
+        expect(res.errors.username).toBeUndefined();
       }
+    });
+
+    it('should reject whitespace-only password in UpdateUserDataDto validation', async () => {
+      const dto = plainToInstance(UpdateUserDataDto, {
+        password: '        ',
+      });
+      const errors = await validate(dto);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0].property).toBe('password');
+    });
+
+    it('should reject whitespace-only username in UpdateUserDataDto validation', async () => {
+      const dto = plainToInstance(UpdateUserDataDto, {
+        username: '   ',
+      });
+      const errors = await validate(dto);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0].property).toBe('username');
     });
 
     it('should handle unhandled database error on save and throw InternalServerErrorException', async () => {

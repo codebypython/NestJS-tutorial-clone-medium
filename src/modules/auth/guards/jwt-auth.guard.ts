@@ -14,6 +14,10 @@ export interface AuthenticatedRequest extends Request {
   token?: string;
 }
 
+export interface GuaranteedAuthRequest extends Request {
+  token: string;
+}
+
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
   constructor(private readonly redisTokenRepository: RedisTokenRepository) {

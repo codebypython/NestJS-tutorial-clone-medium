@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsString,
   Length,
+  Matches,
   MaxLength,
   ValidateNested,
 } from 'class-validator';
@@ -34,6 +35,9 @@ export class UpdateUserDataDto {
   @Length(USERNAME_MIN_LENGTH, USERNAME_MAX_LENGTH, {
     message: 'username must be between 3 and 50 characters',
   })
+  @Matches(/\S/, {
+    message: 'username must not be blank or whitespace only',
+  })
   username?: string;
 
   @ApiPropertyOptional({ example: 'newpassword123' })
@@ -41,6 +45,9 @@ export class UpdateUserDataDto {
   @IsString({ message: 'password must be a string' })
   @Length(USER_PASSWORD_MIN_LENGTH, USER_PASSWORD_MAX_LENGTH, {
     message: 'password must be between 8 and 64 characters',
+  })
+  @Matches(/\S/, {
+    message: 'password must not be blank or whitespace only',
   })
   password?: string;
 

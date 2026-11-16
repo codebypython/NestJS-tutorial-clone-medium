@@ -7,13 +7,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { isDuplicateEntryError } from '../../common/utils/database-error.util';
 import { User } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
 import { ProfileResponseDto } from './dto/profile-response.dto';
 import { Follow } from './entities/follow.entity';
-
-export const MYSQL_DUP_ENTRY_CODE = 'ER_DUP_ENTRY';
-export const MYSQL_DUP_ENTRY_ERRNO = 1062;
 
 @Injectable()
 export class ProfilesService {
@@ -23,10 +21,7 @@ export class ProfilesService {
     private readonly followRepository: Repository<Follow>,
   ) {}
 
-  async getProfile(
-    username: string,
-    currentUser?: User | null,
-  ): Promise<ProfileResponseDto> {
+  private async findTargetUser(username: string): Promise<User> {
     const cleanUsername = username?.trim();
     if (!cleanUsername) {
       throw new NotFoundException({
@@ -40,6 +35,15 @@ export class ProfilesService {
         errors: { user: ['user not found'] },
       });
     }
+
+    return targetUser;
+  }
+
+  async getProfile(
+    username: string,
+    currentUser?: User | null,
+  ): Promise<ProfileResponseDto> {
+    const targetUser = await this.findTargetUser(username);
 
     let isFollowing = false;
     if (currentUser?.id) {
@@ -64,19 +68,7 @@ export class ProfilesService {
     username: string,
     currentUser: User,
   ): Promise<ProfileResponseDto> {
-    const cleanUsername = username?.trim();
-    if (!cleanUsername) {
-      throw new NotFoundException({
-        errors: { user: ['user not found'] },
-      });
-    }
-
-    const targetUser = await this.usersService.findByUsername(cleanUsername);
-    if (!targetUser) {
-      throw new NotFoundException({
-        errors: { user: ['user not found'] },
-      });
-    }
+    const targetUser = await this.findTargetUser(username);
 
     const isSelfFollow = currentUser.id === targetUser.id;
     if (isSelfFollow) {
@@ -98,23 +90,7 @@ export class ProfilesService {
         });
         await this.followRepository.save(newFollow);
       } catch (saveErr: unknown) {
-        const errorObj = saveErr as {
-          code?: string;
-          errno?: number;
-          message?: string;
-          driverError?: { code?: string; errno?: number; message?: string };
-        };
-
-        const isDuplicateError =
-          errorObj.code === MYSQL_DUP_ENTRY_CODE ||
-          errorObj.errno === MYSQL_DUP_ENTRY_ERRNO ||
-          errorObj.driverError?.code === MYSQL_DUP_ENTRY_CODE ||
-          errorObj.driverError?.errno === MYSQL_DUP_ENTRY_ERRNO ||
-          (typeof errorObj.message === 'string' &&
-            (errorObj.message.includes('Duplicate entry') ||
-              errorObj.message.includes('ER_DUP_ENTRY')));
-
-        if (isDuplicateError) {
+        if (isDuplicateEntryError(saveErr)) {
           Logger.warn(
             {
               message: 'Concurrent follow record creation caught',
@@ -162,19 +138,7 @@ export class ProfilesService {
     username: string,
     currentUser: User,
   ): Promise<ProfileResponseDto> {
-    const cleanUsername = username?.trim();
-    if (!cleanUsername) {
-      throw new NotFoundException({
-        errors: { user: ['user not found'] },
-      });
-    }
-
-    const targetUser = await this.usersService.findByUsername(cleanUsername);
-    if (!targetUser) {
-      throw new NotFoundException({
-        errors: { user: ['user not found'] },
-      });
-    }
+    const targetUser = await this.findTargetUser(username);
 
     await this.followRepository.delete({
       followerId: currentUser.id,
