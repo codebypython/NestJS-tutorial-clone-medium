@@ -1,0 +1,192 @@
+import { InternalServerErrorException } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
+import { Follow } from '../profiles/entities/follow.entity';
+import { Tag } from '../tags/entities/tag.entity';
+import { TagsService } from '../tags/tags.service';
+import { User } from '../users/entities/user.entity';
+import { ArticlesRepository } from './articles.repository';
+import { ArticleFavorite } from './entities/article-favorite.entity';
+import { Article } from './entities/article.entity';
+
+describe('ArticlesRepository', () => {
+  let repository: ArticlesRepository;
+
+  const authorUser: User = {
+    id: 'user-author-1',
+    email: 'author@test.com',
+    username: 'author_user',
+    password: 'hashed_password',
+    bio: null,
+    image: null,
+    createdAt: new Date('2026-01-01T00:00:00Z'),
+    updatedAt: new Date('2026-01-01T00:00:00Z'),
+  };
+
+  const baseArticle: Article = {
+    id: 'article-uuid-1',
+    slug: 'how-to-train-your-dragon',
+    title: 'How to train your dragon',
+    description: 'Ever wonder how?',
+    body: 'It takes a Jacobian',
+    authorId: authorUser.id,
+    author: authorUser,
+    favoritesCount: 0,
+    tags: [{ id: 'tag-1', name: 'dragons', createdAt: new Date() }],
+    createdAt: new Date('2026-01-01T00:00:00Z'),
+    updatedAt: new Date('2026-01-01T00:00:00Z'),
+  };
+
+  const mockQueryBuilder = {
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
+    innerJoin: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    addOrderBy: jest.fn().mockReturnThis(),
+    skip: jest.fn().mockReturnThis(),
+    take: jest.fn().mockReturnThis(),
+    getManyAndCount: jest.fn(),
+    update: jest.fn().mockReturnThis(),
+    set: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    execute: jest.fn(),
+  };
+
+  const mockArticleRepo = {
+    findOne: jest.fn(),
+    create: jest.fn(),
+    save: jest.fn(),
+    delete: jest.fn(),
+    increment: jest.fn(),
+    createQueryBuilder: jest.fn(() => mockQueryBuilder),
+  };
+
+  const mockFavRepo = {
+    find: jest.fn(),
+    findOneBy: jest.fn(),
+    insert: jest.fn(),
+    delete: jest.fn(),
+  };
+
+  const mockFollowRepo = {
+    find: jest.fn(),
+  };
+
+  const mockTagRepo = {};
+
+  const mockManager = {
+    getRepository: jest.fn((entity: unknown) => {
+      if (entity === Article) {
+        return mockArticleRepo;
+      }
+      if (entity === ArticleFavorite) {
+        return mockFavRepo;
+      }
+      if (entity === Tag) {
+        return mockTagRepo;
+      }
+      return {};
+    }),
+  };
+
+  const mockDataSource = {
+    transaction: jest.fn(async <T>(cb: (manager: typeof mockManager) => Promise<T>) =>
+      cb(mockManager),
+    ),
+  };
+
+  const mockTagsService = {
+    resolveTags: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ArticlesRepository,
+        { provide: getRepositoryToken(Article), useValue: mockArticleRepo },
+        { provide: getRepositoryToken(ArticleFavorite), useValue: mockFavRepo },
+        { provide: getRepositoryToken(Follow), useValue: mockFollowRepo },
+        { provide: TagsService, useValue: mockTagsService },
+        { provide: DataSource, useValue: mockDataSource },
+      ],
+    }).compile();
+
+    repository = module.get<ArticlesRepository>(ArticlesRepository);
+    jest.clearAllMocks();
+  });
+
+  it('should generate a unique suffixed slug on collision during create', async () => {
+    mockArticleRepo.findOne
+      .mockResolvedValueOnce({ id: 'other-id', slug: 'how-to-train-your-dragon' })
+      .mockResolvedValueOnce(null);
+    mockTagsService.resolveTags.mockResolvedValue(baseArticle.tags);
+    mockArticleRepo.create.mockImplementation((data: Partial<Article>) => ({
+      ...baseArticle,
+      ...data,
+    }));
+    mockArticleRepo.save.mockImplementation(async (entity: Article) => entity);
+
+    const created = await repository.createWithSlugAndTags({
+      title: 'How to train your dragon',
+      description: 'Ever wonder how?',
+      body: 'It takes a Jacobian',
+      tagList: ['dragons'],
+      author: authorUser,
+    });
+
+    expect(created.slug).toMatch(/^how-to-train-your-dragon-[A-Za-z0-9_-]{6}$/);
+  });
+
+  it('should throw InternalServerErrorException when save fails with non-duplicate error', async () => {
+    mockArticleRepo.findOne.mockResolvedValueOnce(null);
+    mockTagsService.resolveTags.mockResolvedValue([]);
+    mockArticleRepo.create.mockReturnValue(baseArticle);
+    mockArticleRepo.save.mockRejectedValue(new Error('Connection lost'));
+
+    await expect(
+      repository.createWithSlugAndTags({
+        title: 'How to train your dragon',
+        description: 'Ever wonder how?',
+        body: 'It takes a Jacobian',
+        author: authorUser,
+      }),
+    ).rejects.toThrow(InternalServerErrorException);
+  });
+
+  it('should apply filters and deterministic ordering in findAll', async () => {
+    mockQueryBuilder.getManyAndCount.mockResolvedValue([[baseArticle], 1]);
+
+    const result = await repository.findAll({
+      tag: 'dragons',
+      author: 'author_user',
+      favorited: 'reader_user',
+      limit: 10,
+      offset: 5,
+    });
+
+    expect(mockQueryBuilder.innerJoin).toHaveBeenCalledTimes(3);
+    expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('article.createdAt', 'DESC');
+    expect(mockQueryBuilder.addOrderBy).toHaveBeenCalledWith('article.id', 'DESC');
+    expect(mockQueryBuilder.skip).toHaveBeenCalledWith(5);
+    expect(mockQueryBuilder.take).toHaveBeenCalledWith(10);
+    expect(result).toEqual([[baseArticle], 1]);
+  });
+
+  it('should handle idempotent favorite and unfavorite transactions', async () => {
+    mockFavRepo.findOneBy.mockResolvedValueOnce(null);
+    mockFavRepo.insert.mockResolvedValue({});
+    mockArticleRepo.increment.mockResolvedValue({});
+    mockArticleRepo.findOne.mockResolvedValueOnce({ ...baseArticle, favoritesCount: 1 });
+
+    const favorited = await repository.addFavorite('reader-1', baseArticle);
+    expect(favorited.favoritesCount).toBe(1);
+
+    mockFavRepo.delete.mockResolvedValueOnce({ affected: 1 });
+    mockQueryBuilder.execute.mockResolvedValueOnce({});
+    mockArticleRepo.findOne.mockResolvedValueOnce(baseArticle);
+
+    const unfavorited = await repository.removeFavorite('reader-1', baseArticle);
+    expect(unfavorited.favoritesCount).toBe(0);
+  });
+});
