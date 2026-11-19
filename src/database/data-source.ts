@@ -6,6 +6,7 @@ import { Attachment } from '../modules/attachments/entities/attachment.entity';
 import { Article } from '../modules/articles/entities/article.entity';
 import { ArticleFavorite } from '../modules/articles/entities/article-favorite.entity';
 import { Tag } from '../modules/tags/entities/tag.entity';
+import { Comment } from '../modules/comments/entities/comment.entity';
 
 dotenv.config();
 
@@ -25,6 +26,7 @@ export const dataSourceOptions: DataSourceOptions = {
     Article,
     ArticleFavorite,
     Tag,
+    Comment,
     'dist/**/*.entity.js',
   ],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
