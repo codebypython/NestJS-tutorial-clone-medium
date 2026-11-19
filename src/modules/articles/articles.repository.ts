@@ -1,8 +1,9 @@
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { nanoid } from 'nanoid';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { isDuplicateEntryError } from '../../common/utils/database-error.util';
+import { rethrowAsPersistenceError } from '../../common/utils/persistence-error.util';
 import { Follow } from '../profiles/entities/follow.entity';
 import { Tag } from '../tags/entities/tag.entity';
 import { TagsService } from '../tags/tags.service';
@@ -41,6 +42,8 @@ export interface UserArticleInteractions {
   followingIds: Set<string>;
 }
 
+const ARTICLES_REPOSITORY_CONTEXT = 'ArticlesRepository';
+
 @Injectable()
 export class ArticlesRepository {
   constructor(
@@ -53,26 +56,6 @@ export class ArticlesRepository {
     private readonly tagsService: TagsService,
     private readonly dataSource: DataSource,
   ) {}
-
-  private handlePersistenceError(err: unknown, operation: string): never {
-    const fatalError = err instanceof Error ? err : new Error(String(err));
-    Logger.error(
-      {
-        message: `Unhandled database error during ${operation}`,
-        explanation: `Database operation failed during ${operation}`,
-        guidance: 'Verify database connectivity and schema health',
-        errorName: fatalError.name,
-        errorMessage: fatalError.message,
-        rawError: fatalError,
-      },
-      'ArticlesRepository',
-    );
-    throw new InternalServerErrorException({
-      message: 'Database persistence failed due to an internal server error',
-      explanation: `The system encountered an unhandled error during ${operation}`,
-      guidance: 'Check database connectivity and server logs',
-    });
-  }
 
   private async generateUniqueSlug(
     baseSlug: string,
@@ -117,11 +100,15 @@ export class ArticlesRepository {
           article.slug = `${baseSlug}-${nanoid(SLUG_SUFFIX_LENGTH)}`;
           continue;
         }
-        return this.handlePersistenceError(err, operation);
+        return rethrowAsPersistenceError(err, operation, ARTICLES_REPOSITORY_CONTEXT);
       }
     }
 
-    return this.handlePersistenceError(new Error('Exceeded slug retry attempts'), operation);
+    return rethrowAsPersistenceError(
+      new Error('Exceeded slug retry attempts'),
+      operation,
+      ARTICLES_REPOSITORY_CONTEXT,
+    );
   }
 
   async findBySlug(slug: string, manager?: EntityManager): Promise<Article | null> {
@@ -285,7 +272,7 @@ export class ArticlesRepository {
     try {
       await this.articleRepository.delete({ id: articleId });
     } catch (err: unknown) {
-      this.handlePersistenceError(err, 'article deletion');
+      rethrowAsPersistenceError(err, 'article deletion', ARTICLES_REPOSITORY_CONTEXT);
     }
   }
 
@@ -312,10 +299,10 @@ export class ArticlesRepository {
                 guidance: 'Operation treated as idempotent favorite',
                 error: String(err),
               },
-              'ArticlesRepository',
+              ARTICLES_REPOSITORY_CONTEXT,
             );
           } else {
-            this.handlePersistenceError(err, 'article favorite');
+            rethrowAsPersistenceError(err, 'article favorite', ARTICLES_REPOSITORY_CONTEXT);
           }
         }
       }

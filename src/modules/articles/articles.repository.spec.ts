@@ -182,11 +182,25 @@ describe('ArticlesRepository', () => {
     const favorited = await repository.addFavorite('reader-1', baseArticle);
     expect(favorited.favoritesCount).toBe(1);
 
+    const articleWithFavorites: Article = { ...baseArticle, favoritesCount: 5 };
     mockFavRepo.delete.mockResolvedValueOnce({ affected: 1 });
     mockQueryBuilder.execute.mockResolvedValueOnce({});
-    mockArticleRepo.findOne.mockResolvedValueOnce(baseArticle);
+    mockArticleRepo.findOne.mockResolvedValueOnce({ ...baseArticle, favoritesCount: 4 });
 
-    const unfavorited = await repository.removeFavorite('reader-1', baseArticle);
-    expect(unfavorited.favoritesCount).toBe(0);
+    const unfavorited = await repository.removeFavorite('reader-1', articleWithFavorites);
+
+    expect(mockQueryBuilder.update).toHaveBeenCalledWith(Article);
+    expect(mockQueryBuilder.set).toHaveBeenCalledWith({
+      favoritesCount: expect.any(Function),
+    });
+    const setFn = (
+      mockQueryBuilder.set.mock.calls[0][0] as { favoritesCount: () => string }
+    ).favoritesCount;
+    expect(setFn()).toBe('GREATEST(favorites_count - 1, 0)');
+    expect(mockQueryBuilder.where).toHaveBeenCalledWith('id = :id', {
+      id: articleWithFavorites.id,
+    });
+    expect(mockQueryBuilder.execute).toHaveBeenCalled();
+    expect(unfavorited.favoritesCount).toBe(4);
   });
 });

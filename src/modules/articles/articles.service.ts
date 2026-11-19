@@ -18,14 +18,7 @@ export class ArticlesService {
   constructor(private readonly articlesRepository: ArticlesRepository) {}
 
   private async findArticleOrThrow(slug: string): Promise<Article> {
-    const cleanSlug = slug?.trim();
-    if (!cleanSlug) {
-      throw new NotFoundException({
-        errors: { article: ['article not found'] },
-      });
-    }
-
-    const article = await this.articlesRepository.findBySlug(cleanSlug);
+    const article = await this.articlesRepository.findBySlug(slug);
     if (!article) {
       throw new NotFoundException({
         errors: { article: ['article not found'] },

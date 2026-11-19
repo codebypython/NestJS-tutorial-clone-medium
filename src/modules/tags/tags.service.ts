@@ -1,8 +1,11 @@
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { isDuplicateEntryError } from '../../common/utils/database-error.util';
+import { rethrowAsPersistenceError } from '../../common/utils/persistence-error.util';
 import { Tag } from './entities/tag.entity';
+
+const TAGS_SERVICE_CONTEXT = 'TagsService';
 
 @Injectable()
 export class TagsService {
@@ -36,23 +39,7 @@ export class TagsService {
         await repo.save(newTag);
       } catch (err: unknown) {
         if (!isDuplicateEntryError(err)) {
-          const fatalError = err instanceof Error ? err : new Error(String(err));
-          Logger.error(
-            {
-              message: 'Unhandled database error during tag resolution',
-              explanation: 'Database operation failed during tag resolution',
-              guidance: 'Verify database connectivity and schema health',
-              errorName: fatalError.name,
-              errorMessage: fatalError.message,
-              rawError: fatalError,
-            },
-            'TagsService',
-          );
-          throw new InternalServerErrorException({
-            message: 'Database persistence failed due to an internal server error',
-            explanation: 'The system encountered an unhandled error during tag resolution',
-            guidance: 'Check database connectivity and server logs',
-          });
+          rethrowAsPersistenceError(err, 'tag resolution', TAGS_SERVICE_CONTEXT);
         }
       }
     }

@@ -51,6 +51,14 @@
 ---
 
 ## Nhật Ký Chi Tiết Từng Lượt Chuyển Giao (Handoff Log)
+- **[2026-11-19 12:20] [Agent: Antigravity IDE (PR4 Mentor Feedback Resolution)]**:
+  - Khắc phục triệt để 5 góp ý code review của Mentor `huongnt-2545` trên PR #4:
+    1. **Tạo `@NoCacheHeaders()` Decorator**: Đóng gói header `Cache-Control: no-store` dùng chung tại `src/common/decorators/no-cache-headers.decorator.ts`, loại bỏ 3 dòng `@Header` lặp lại tại 5 endpoint của `ArticlesController`.
+    2. **Xóa Dead Defensive Check**: Loại bỏ `slug?.trim()` và `if (!cleanSlug)` trong `ArticlesService.findArticleOrThrow`, chỉ giữ lại kiểm tra `!article` từ database query.
+    3. **Tách Shared Persistence Error Helper**: Tạo `rethrowAsPersistenceError` tại `src/common/utils/persistence-error.util.ts`, dùng chung cho `ArticlesRepository` và `TagsService`, kèm unit test suite `persistence-error.util.spec.ts`.
+    4. **Loại bỏ False-Positive Test trong `ArticlesRepository.spec.ts`**: Đổi dữ liệu mock `removeFavorite` từ 0 thành 5 -> 4, assert chi tiết `mockQueryBuilder.set` được gọi với biểu thức trừ an toàn `GREATEST(favorites_count - 1, 0)`.
+    5. **Xóa Đăng Ký Entity `Tag` Thừa**: Bỏ `Tag` khỏi `TypeOrmModule.forFeature` trong `ArticlesModule` vì entity đã được export từ `TagsModule`.
+    6. **Bổ sung Quy chuẩn vĩnh viễn**: Cập nhật Rules 7-11 vào `AGENTS.md` và `D:\Working-kit\harness\30-role-worker-karpathy.md`.
 - **[2026-11-11 16:45] [Agent: Antigravity IDE (Reviewer Audit & Hardening)]**:
   - Thực hiện audit độc lập, phát hiện và sửa chữa triệt để các khiếm khuyết từ lần làm việc trước:
     1. **Loại bỏ Test Tampering trong `optional-jwt-auth.guard.spec.ts`**: Xóa bỏ mock method-under-test (`guard.canActivate`), chuyển sang spy trên prototype `AuthGuard` để kiểm thử thực chất logic canActivate, token extraction, và Redis blacklist lookup.

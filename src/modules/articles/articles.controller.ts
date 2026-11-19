@@ -3,7 +3,6 @@ import {
   Controller,
   Delete,
   Get,
-  Header,
   HttpCode,
   HttpStatus,
   Param,
@@ -14,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AUTH_SCHEME } from '../../common/constants';
+import { NoCacheHeaders } from '../../common/decorators/no-cache-headers.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
@@ -32,9 +32,7 @@ export class ArticlesController {
 
   @Get()
   @UseGuards(OptionalJwtAuthGuard)
-  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
-  @Header('Pragma', 'no-cache')
-  @Header('Expires', '0')
+  @NoCacheHeaders()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'List articles with optional filters' })
   @ApiResponse({
@@ -51,9 +49,7 @@ export class ArticlesController {
 
   @Get('feed')
   @UseGuards(JwtAuthGuard)
-  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
-  @Header('Pragma', 'no-cache')
-  @Header('Expires', '0')
+  @NoCacheHeaders()
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth(AUTH_SCHEME)
   @ApiOperation({ summary: 'Get recent articles from followed users' })
@@ -75,9 +71,7 @@ export class ArticlesController {
 
   @Get(':slug')
   @UseGuards(OptionalJwtAuthGuard)
-  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
-  @Header('Pragma', 'no-cache')
-  @Header('Expires', '0')
+  @NoCacheHeaders()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get a single article by slug' })
   @ApiResponse({
@@ -178,9 +172,7 @@ export class ArticlesController {
 
   @Post(':slug/favorite')
   @UseGuards(JwtAuthGuard)
-  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
-  @Header('Pragma', 'no-cache')
-  @Header('Expires', '0')
+  @NoCacheHeaders()
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth(AUTH_SCHEME)
   @ApiOperation({ summary: 'Favorite an article' })
@@ -206,9 +198,7 @@ export class ArticlesController {
 
   @Delete(':slug/favorite')
   @UseGuards(JwtAuthGuard)
-  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
-  @Header('Pragma', 'no-cache')
-  @Header('Expires', '0')
+  @NoCacheHeaders()
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth(AUTH_SCHEME)
   @ApiOperation({ summary: 'Unfavorite an article' })

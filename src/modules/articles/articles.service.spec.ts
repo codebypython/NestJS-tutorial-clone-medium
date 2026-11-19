@@ -154,11 +154,6 @@ describe('ArticlesService', () => {
   });
 
   describe('findOne', () => {
-    it('should throw NotFoundException when slug is blank or missing', async () => {
-      await expect(service.findOne('   ', null)).rejects.toThrow(NotFoundException);
-      expect(mockArticlesRepository.findBySlug).not.toHaveBeenCalled();
-    });
-
     it('should throw NotFoundException when article does not exist', async () => {
       mockArticlesRepository.findBySlug.mockResolvedValue(null);
 
