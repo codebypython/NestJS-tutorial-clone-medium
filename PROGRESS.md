@@ -1,43 +1,38 @@
 # TIẾN ĐỘ DỰ ÁN & CHUYỂN GIAO TRẠNG THÁI (PROJECT PROGRESS)
 
 ## Handoff Anchor
-- **Active Task:** TASK-03 (Pull Request 3 - User APIs, Social Profiles & Polymorphic Attachments)
+- **Active Task:** TASK-04 (Pull Request 4 - CRUD Articles & Tagging System)
 - **Current State:** VERIFIED_PASS
 - **Active Environment:** Node.js v22.19.0 / NestJS 10.x / MySQL2 / ioredis
 - **Target Files:**
-  - `src/database/migrations/1794215000000-CreateFollowsAndAttachmentsTables.ts`
+  - `src/database/migrations/1794216000000-CreateArticlesAndTagsTables.ts`
   - `src/database/data-source.ts`
-  - `src/modules/profiles/entities/follow.entity.ts`
-  - `src/modules/attachments/entities/attachment.entity.ts`
-  - `src/modules/auth/guards/optional-jwt-auth.guard.ts`
-  - `src/modules/auth/guards/optional-jwt-auth.guard.spec.ts`
-  - `src/modules/auth/auth.controller.ts`
-  - `src/modules/auth/auth.module.ts`
-  - `src/modules/users/dto/update-user.dto.ts`
-  - `src/modules/users/users.service.ts`
-  - `src/modules/users/users.service.spec.ts`
-  - `src/modules/users/users.controller.ts`
-  - `src/modules/users/users.controller.spec.ts`
-  - `src/modules/users/users.module.ts`
-  - `src/modules/profiles/dto/profile-response.dto.ts`
-  - `src/modules/profiles/profiles.service.ts`
-  - `src/modules/profiles/profiles.service.spec.ts`
-  - `src/modules/profiles/profiles.controller.ts`
-  - `src/modules/profiles/profiles.controller.spec.ts`
-  - `src/modules/profiles/profiles.module.ts`
-  - `src/modules/attachments/dto/attachment-response.dto.ts`
-  - `src/modules/attachments/attachments.service.ts`
-  - `src/modules/attachments/attachments.service.spec.ts`
-  - `src/modules/attachments/attachments.controller.ts`
-  - `src/modules/attachments/attachments.controller.spec.ts`
-  - `src/modules/attachments/attachments.module.ts`
-  - `src/app.module.ts`
-  - `test/user.e2e-spec.ts`
-  - `test/profiles.e2e-spec.ts`
+  - `src/modules/articles/entities/article.entity.ts`
+  - `src/modules/articles/entities/article-favorite.entity.ts`
+  - `src/modules/tags/entities/tag.entity.ts`
+  - `src/modules/tags/tags.service.ts`
+  - `src/modules/tags/tags.service.spec.ts`
+  - `src/modules/tags/tags.module.ts`
+  - `src/modules/articles/utils/article-slug.util.ts`
+  - `src/modules/articles/mappers/article.mapper.ts`
+  - `src/modules/articles/articles.repository.ts`
+  - `src/modules/articles/articles.repository.spec.ts`
+  - `src/modules/articles/articles.module.ts`
+  - `src/modules/articles/articles.controller.ts`
+  - `src/modules/articles/articles.service.ts`
+  - `src/modules/articles/dto/create-article.dto.ts`
+  - `src/modules/articles/dto/update-article.dto.ts`
+  - `src/modules/articles/dto/list-articles-query.dto.ts`
+  - `src/modules/articles/dto/feed-articles-query.dto.ts`
+  - `src/modules/articles/dto/article-response.dto.ts`
+  - `src/modules/articles/articles.controller.spec.ts`
+  - `src/modules/articles/articles.service.spec.ts`
+  - `src/modules/articles/dto/article-dto.spec.ts`
+  - `test/articles.e2e-spec.ts`
 - **Last Verification:**
-  - `npm test`: 11/11 suites passed, 86/86 unit tests passed (exit code: 0)
+  - `npm test`: 18/18 suites passed, 134/134 unit tests passed (exit code: 0)
   - `npm run build`: Nest build successfully compiled (exit code: 0)
-  - `npm run lint`: SunLint passed with 0 errors across 49 files (exit code: 0)
+  - `npm run lint`: SunLint passed with 0 errors across 66 files (exit code: 0)
 - **Next Immediate Action:** Ready for PR review and merge into main.
 - **Blockers / Risks:** None.
 
@@ -51,10 +46,19 @@
 | **TASK-02A** | TypeORM Migration thủ công, User Schema, Auth Module (PR2) | [x] PASS | `npm test` | `0` | 4/4 suites, 30/30 tests passed | 2026-11-09 18:30 |
 | **TASK-02B** | Khắc phục toàn diện 9 góp ý code review của Mentor PR2 | [x] PASS | `npm run build && npm test && npm run lint` | `0` | 0 errors across 37 files, 30/30 unit tests passed, commit `7ade8eb` pushed | 2026-11-10 14:04 |
 | **TASK-03** | Profile Subsystem, Follow/Unfollow, Attachments Upload (PR3) | [x] PASS | `npm run build && npm test && npm run lint` | `0` | 11/11 suites, 86/86 unit tests passed, 0 lint errors across 49 files | 2026-11-11 16:45 |
+| **TASK-04** | CRUD Articles, Tagging, Feed & Favorites (PR4) | [x] PASS | `npm run build && npm test && npm run lint` | `0` | 18/18 suites, 134/134 unit tests passed, 0 lint errors across 66 files | 2026-11-18 17:57 |
 
 ---
 
 ## Nhật Ký Chi Tiết Từng Lượt Chuyển Giao (Handoff Log)
+- **[2026-11-19 12:20] [Agent: Antigravity IDE (PR4 Mentor Feedback Resolution)]**:
+  - Khắc phục triệt để 5 góp ý code review của Mentor `huongnt-2545` trên PR #4:
+    1. **Tạo `@NoCacheHeaders()` Decorator**: Đóng gói header `Cache-Control: no-store` dùng chung tại `src/common/decorators/no-cache-headers.decorator.ts`, loại bỏ 3 dòng `@Header` lặp lại tại 5 endpoint của `ArticlesController`.
+    2. **Xóa Dead Defensive Check**: Loại bỏ `slug?.trim()` và `if (!cleanSlug)` trong `ArticlesService.findArticleOrThrow`, chỉ giữ lại kiểm tra `!article` từ database query.
+    3. **Tách Shared Persistence Error Helper**: Tạo `rethrowAsPersistenceError` tại `src/common/utils/persistence-error.util.ts`, dùng chung cho `ArticlesRepository` và `TagsService`, kèm unit test suite `persistence-error.util.spec.ts`.
+    4. **Loại bỏ False-Positive Test trong `ArticlesRepository.spec.ts`**: Đổi dữ liệu mock `removeFavorite` từ 0 thành 5 -> 4, assert chi tiết `mockQueryBuilder.set` được gọi với biểu thức trừ an toàn `GREATEST(favorites_count - 1, 0)`.
+    5. **Xóa Đăng Ký Entity `Tag` Thừa**: Bỏ `Tag` khỏi `TypeOrmModule.forFeature` trong `ArticlesModule` vì entity đã được export từ `TagsModule`.
+    6. **Bổ sung Quy chuẩn vĩnh viễn**: Cập nhật Rules 7-11 vào `AGENTS.md` và `D:\Working-kit\harness\30-role-worker-karpathy.md`.
 - **[2026-11-11 16:45] [Agent: Antigravity IDE (Reviewer Audit & Hardening)]**:
   - Thực hiện audit độc lập, phát hiện và sửa chữa triệt để các khiếm khuyết từ lần làm việc trước:
     1. **Loại bỏ Test Tampering trong `optional-jwt-auth.guard.spec.ts`**: Xóa bỏ mock method-under-test (`guard.canActivate`), chuyển sang spy trên prototype `AuthGuard` để kiểm thử thực chất logic canActivate, token extraction, và Redis blacklist lookup.
