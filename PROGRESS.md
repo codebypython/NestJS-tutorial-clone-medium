@@ -1,38 +1,29 @@
 # TIẾN ĐỘ DỰ ÁN & CHUYỂN GIAO TRẠNG THÁI (PROJECT PROGRESS)
 
 ## Handoff Anchor
-- **Active Task:** TASK-04 (Pull Request 4 - CRUD Articles & Tagging System)
+- **Active Task:** TASK-05 (Pull Request 5 - CRD Comments & Dual-Ownership Authorization)
 - **Current State:** VERIFIED_PASS
 - **Active Environment:** Node.js v22.19.0 / NestJS 10.x / MySQL2 / ioredis
 - **Target Files:**
-  - `src/database/migrations/1794216000000-CreateArticlesAndTagsTables.ts`
+  - `src/database/migrations/1794217000000-CreateCommentsTable.ts`
   - `src/database/data-source.ts`
-  - `src/modules/articles/entities/article.entity.ts`
-  - `src/modules/articles/entities/article-favorite.entity.ts`
-  - `src/modules/tags/entities/tag.entity.ts`
-  - `src/modules/tags/tags.service.ts`
-  - `src/modules/tags/tags.service.spec.ts`
-  - `src/modules/tags/tags.module.ts`
-  - `src/modules/articles/utils/article-slug.util.ts`
-  - `src/modules/articles/mappers/article.mapper.ts`
-  - `src/modules/articles/articles.repository.ts`
-  - `src/modules/articles/articles.repository.spec.ts`
-  - `src/modules/articles/articles.module.ts`
-  - `src/modules/articles/articles.controller.ts`
-  - `src/modules/articles/articles.service.ts`
-  - `src/modules/articles/dto/create-article.dto.ts`
-  - `src/modules/articles/dto/update-article.dto.ts`
-  - `src/modules/articles/dto/list-articles-query.dto.ts`
-  - `src/modules/articles/dto/feed-articles-query.dto.ts`
-  - `src/modules/articles/dto/article-response.dto.ts`
-  - `src/modules/articles/articles.controller.spec.ts`
-  - `src/modules/articles/articles.service.spec.ts`
-  - `src/modules/articles/dto/article-dto.spec.ts`
-  - `test/articles.e2e-spec.ts`
+  - `src/modules/comments/entities/comment.entity.ts`
+  - `src/modules/comments/dto/create-comment.dto.ts`
+  - `src/modules/comments/dto/comment-response.dto.ts`
+  - `src/modules/comments/dto/comment-dto.spec.ts`
+  - `src/modules/comments/mappers/comment.mapper.ts`
+  - `src/modules/comments/comments.repository.ts`
+  - `src/modules/comments/comments.repository.spec.ts`
+  - `src/modules/comments/comments.service.ts`
+  - `src/modules/comments/comments.service.spec.ts`
+  - `src/modules/comments/comments.controller.ts`
+  - `src/modules/comments/comments.controller.spec.ts`
+  - `src/modules/comments/comments.module.ts`
+  - `test/comments.e2e-spec.ts`
 - **Last Verification:**
-  - `npm test`: 18/18 suites passed, 134/134 unit tests passed (exit code: 0)
+  - `npm test`: 23/23 suites passed, 149/149 unit tests passed (exit code: 0)
   - `npm run build`: Nest build successfully compiled (exit code: 0)
-  - `npm run lint`: SunLint passed with 0 errors across 66 files (exit code: 0)
+  - `npm run lint`: SunLint passed with 0 errors across 76 files (exit code: 0)
 - **Next Immediate Action:** Ready for PR review and merge into main.
 - **Blockers / Risks:** None.
 
@@ -47,10 +38,21 @@
 | **TASK-02B** | Khắc phục toàn diện 9 góp ý code review của Mentor PR2 | [x] PASS | `npm run build && npm test && npm run lint` | `0` | 0 errors across 37 files, 30/30 unit tests passed, commit `7ade8eb` pushed | 2026-11-10 14:04 |
 | **TASK-03** | Profile Subsystem, Follow/Unfollow, Attachments Upload (PR3) | [x] PASS | `npm run build && npm test && npm run lint` | `0` | 11/11 suites, 86/86 unit tests passed, 0 lint errors across 49 files | 2026-11-11 16:45 |
 | **TASK-04** | CRUD Articles, Tagging, Feed & Favorites (PR4) | [x] PASS | `npm run build && npm test && npm run lint` | `0` | 18/18 suites, 134/134 unit tests passed, 0 lint errors across 66 files | 2026-11-18 17:57 |
+| **TASK-05** | CRD Comments & Dual-Ownership Authorization (PR5) | [x] PASS | `npm run build && npm test && npm run lint` | `0` | 23/23 suites, 149/149 unit tests passed, 0 lint errors across 76 files | 2026-11-20 16:27 |
 
 ---
 
 ## Nhật Ký Chi Tiết Từng Lượt Chuyển Giao (Handoff Log)
+- **[2026-11-20 16:27] [Agent: Antigravity IDE]**:
+  - Triển khai hoàn thiện Pull Request 5 (PR5 - CRD Comments):
+    1. Migration thủ công `1794217000000-CreateCommentsTable.ts` và Entity `Comment` với quan hệ cascade tới `Article` và `User`.
+    2. `CreateCommentDto` với validation chặn chuỗi toàn khoảng trắng `@Matches(/\S/)`, `@MaxLength(4000)`, và response schemas Swagger.
+    3. `CommentsRepository` và `comment.mapper.ts`: đóng gói truy vấn, phân trang sắp xếp, batch-load cờ `following` chống N+1 query.
+    4. `CommentsService` và `CommentsController`: 3 endpoint tại route `@Controller('articles/:slug/comments')`:
+       - `POST /api/articles/:slug/comments` (201 Created, JwtAuthGuard)
+       - `GET /api/articles/:slug/comments` (200 OK, OptionalJwtAuthGuard, `@NoCacheHeaders()`)
+       - `DELETE /api/articles/:slug/comments/:id` (204 No Content, JwtAuthGuard, phân quyền kép Dual-Ownership: tác giả bình luận HOẶC tác giả bài viết)
+    5. Unit tests và E2E tests: 23/23 suites passed, 149/149 unit tests passed (100% pass), `npm run build` exit 0, SunLint 0 errors across 76 files.
 - **[2026-11-19 12:20] [Agent: Antigravity IDE (PR4 Mentor Feedback Resolution)]**:
   - Khắc phục triệt để 5 góp ý code review của Mentor `huongnt-2545` trên PR #4:
     1. **Tạo `@NoCacheHeaders()` Decorator**: Đóng gói header `Cache-Control: no-store` dùng chung tại `src/common/decorators/no-cache-headers.decorator.ts`, loại bỏ 3 dòng `@Header` lặp lại tại 5 endpoint của `ArticlesController`.
