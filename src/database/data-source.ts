@@ -8,7 +8,9 @@ import { ArticleFavorite } from '../modules/articles/entities/article-favorite.e
 import { Tag } from '../modules/tags/entities/tag.entity';
 import { Comment } from '../modules/comments/entities/comment.entity';
 
-dotenv.config();
+dotenv.config({
+  path: process.env.NODE_ENV === 'test' ? '.env.test' : '.env',
+});
 
 const DEFAULT_DB_PORT = 3306;
 

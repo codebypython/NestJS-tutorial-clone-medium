@@ -1,7 +1,4 @@
-import {
-  DEFAULT_AVATAR_UPLOAD_DIR,
-  deriveUploadUrlPrefix,
-} from '../common/utils/upload-path.util';
+import { DEFAULT_AVATAR_UPLOAD_DIR, deriveUploadUrlPrefix } from '../common/utils/upload-path.util';
 
 export interface AppConfig {
   port: number;
@@ -19,6 +16,7 @@ export interface AppConfig {
   redis: {
     host: string;
     port: number;
+    db: number;
   };
   jwt: {
     secret: string;
@@ -40,9 +38,7 @@ export class ConfigurationException extends Error {
 export const configuration = (): AppConfig => {
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret && process.env.NODE_ENV !== 'test') {
-    throw new ConfigurationException(
-      'FATAL: JWT_SECRET environment variable is missing.',
-    );
+    throw new ConfigurationException('FATAL: JWT_SECRET environment variable is missing.');
   }
 
   return {
@@ -61,17 +57,15 @@ export const configuration = (): AppConfig => {
     redis: {
       host: process.env.REDIS_HOST ?? 'localhost',
       port: parseInt(process.env.REDIS_PORT ?? '6379', 10),
+      db: parseInt(process.env.REDIS_DB ?? '0', 10),
     },
     jwt: {
       secret: jwtSecret ?? '',
       expiresIn: process.env.JWT_EXPIRES_IN ?? '24h',
     },
     upload: {
-      destination:
-        process.env.UPLOAD_DESTINATION ?? DEFAULT_AVATAR_UPLOAD_DIR,
-      urlPrefix: deriveUploadUrlPrefix(
-        process.env.UPLOAD_DESTINATION ?? DEFAULT_AVATAR_UPLOAD_DIR,
-      ),
+      destination: process.env.UPLOAD_DESTINATION ?? DEFAULT_AVATAR_UPLOAD_DIR,
+      urlPrefix: deriveUploadUrlPrefix(process.env.UPLOAD_DESTINATION ?? DEFAULT_AVATAR_UPLOAD_DIR),
     },
   };
 };
