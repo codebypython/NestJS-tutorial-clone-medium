@@ -1,7 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
-import { DEFAULT_REDIS_PORT, REDIS_CLIENT } from './redis.constants';
+import { DEFAULT_REDIS_DB, DEFAULT_REDIS_PORT, REDIS_CLIENT } from './redis.constants';
 import { RedisService } from './redis.service';
 import { RedisTokenRepository } from './repositories/redis-token.repository';
 
@@ -15,9 +15,11 @@ import { RedisTokenRepository } from './repositories/redis-token.repository';
       useFactory: (configService: ConfigService): Redis => {
         const host = configService.get<string>('redis.host', 'localhost');
         const port = configService.get<number>('redis.port', DEFAULT_REDIS_PORT);
+        const db = configService.get<number>('redis.db', DEFAULT_REDIS_DB);
         return new Redis({
           host,
           port,
+          db,
           lazyConnect: true,
           maxRetriesPerRequest: 3,
         });
