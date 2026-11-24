@@ -9,7 +9,7 @@ export class CreateCommentDataDto {
   @IsString({ message: 'body must be a string' })
   @IsNotEmpty({ message: 'body must not be empty' })
   @MaxLength(COMMENT_BODY_MAX_LENGTH, {
-    message: 'body must not exceed 4000 characters',
+    message: 'body must not exceed $constraint1 characters',
   })
   @Matches(/\S/, {
     message: 'body must not be blank or whitespace only',

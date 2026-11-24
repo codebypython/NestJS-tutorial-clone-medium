@@ -1,8 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { rethrowAsPersistenceError } from '../../common/utils/persistence-error.util';
-import { Follow } from '../profiles/entities/follow.entity';
 import { User } from '../users/entities/user.entity';
 import { Comment } from './entities/comment.entity';
 
@@ -19,14 +18,11 @@ export class CommentsRepository {
   constructor(
     @InjectRepository(Comment)
     private readonly commentRepository: Repository<Comment>,
-    @InjectRepository(Follow)
-    private readonly followRepository: Repository<Follow>,
   ) {}
 
-  async findById(id: number): Promise<Comment | null> {
+  async findByIdAndArticleId(id: number, articleId: string): Promise<Comment | null> {
     return this.commentRepository.findOne({
-      where: { id },
-      relations: ['author', 'article'],
+      where: { id, articleId },
     });
   }
 
@@ -36,25 +32,6 @@ export class CommentsRepository {
       relations: ['author'],
       order: { createdAt: 'DESC', id: 'DESC' },
     });
-  }
-
-  async findFollowingAuthorIds(
-    followerId: string,
-    authorIds: string[],
-  ): Promise<Set<string>> {
-    if (authorIds.length === 0) {
-      return new Set<string>();
-    }
-
-    const follows = await this.followRepository.find({
-      where: {
-        followerId,
-        followingId: In(authorIds),
-      },
-      select: ['followingId'],
-    });
-
-    return new Set(follows.map((follow) => follow.followingId));
   }
 
   async create(input: CreateCommentPersistenceInput): Promise<Comment> {

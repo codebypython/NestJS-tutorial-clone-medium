@@ -1,7 +1,6 @@
 import { InternalServerErrorException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Follow } from '../profiles/entities/follow.entity';
 import { User } from '../users/entities/user.entity';
 import { CommentsRepository } from './comments.repository';
 import { Comment } from './entities/comment.entity';
@@ -39,16 +38,11 @@ describe('CommentsRepository', () => {
     delete: jest.fn(),
   };
 
-  const mockFollowRepo = {
-    find: jest.fn(),
-  };
-
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CommentsRepository,
         { provide: getRepositoryToken(Comment), useValue: mockCommentRepo },
-        { provide: getRepositoryToken(Follow), useValue: mockFollowRepo },
       ],
     }).compile();
 
@@ -56,15 +50,14 @@ describe('CommentsRepository', () => {
     jest.clearAllMocks();
   });
 
-  describe('findById', () => {
-    it('should find comment with relations', async () => {
+  describe('findByIdAndArticleId', () => {
+    it('should find comment by id and articleId without relations', async () => {
       mockCommentRepo.findOne.mockResolvedValue(mockComment);
 
-      const result = await repository.findById(1);
+      const result = await repository.findByIdAndArticleId(1, 'article-uuid-1');
 
       expect(mockCommentRepo.findOne).toHaveBeenCalledWith({
-        where: { id: 1 },
-        relations: ['author', 'article'],
+        where: { id: 1, articleId: 'article-uuid-1' },
       });
       expect(result).toEqual(mockComment);
     });
@@ -82,22 +75,6 @@ describe('CommentsRepository', () => {
         order: { createdAt: 'DESC', id: 'DESC' },
       });
       expect(result).toEqual([mockComment]);
-    });
-  });
-
-  describe('findFollowingAuthorIds', () => {
-    it('should return empty Set when authorIds is empty', async () => {
-      const result = await repository.findFollowingAuthorIds('user-1', []);
-      expect(result).toEqual(new Set());
-      expect(mockFollowRepo.find).not.toHaveBeenCalled();
-    });
-
-    it('should query following relationships for authors', async () => {
-      mockFollowRepo.find.mockResolvedValue([{ followingId: 'author-1' }]);
-
-      const result = await repository.findFollowingAuthorIds('user-1', ['author-1', 'author-2']);
-
-      expect(result).toEqual(new Set(['author-1']));
     });
   });
 

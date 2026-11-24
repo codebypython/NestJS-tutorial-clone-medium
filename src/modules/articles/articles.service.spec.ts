@@ -1,5 +1,6 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { ProfilesService } from '../profiles/profiles.service';
 import { User } from '../users/entities/user.entity';
 import { ArticlesRepository } from './articles.repository';
 import { ArticlesService } from './articles.service';
@@ -49,9 +50,10 @@ describe('ArticlesService', () => {
 
   const mockArticlesRepository = {
     findBySlug: jest.fn(),
+    findSummaryBySlug: jest.fn(),
     findAll: jest.fn(),
     findFeed: jest.fn(),
-    findUserInteractions: jest.fn(),
+    findFavoritedArticleIds: jest.fn(),
     createWithSlugAndTags: jest.fn(),
     updateWithSlugAndTags: jest.fn(),
     deleteById: jest.fn(),
@@ -59,19 +61,44 @@ describe('ArticlesService', () => {
     removeFavorite: jest.fn(),
   };
 
+  const mockProfilesService = {
+    findFollowingIds: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ArticlesService,
         { provide: ArticlesRepository, useValue: mockArticlesRepository },
+        { provide: ProfilesService, useValue: mockProfilesService },
       ],
     }).compile();
 
     service = module.get<ArticlesService>(ArticlesService);
     jest.clearAllMocks();
-    mockArticlesRepository.findUserInteractions.mockResolvedValue({
-      favoritedIds: new Set<string>(),
-      followingIds: new Set<string>(),
+    mockArticlesRepository.findFavoritedArticleIds.mockResolvedValue(new Set<string>());
+    mockProfilesService.findFollowingIds.mockResolvedValue(new Set<string>());
+  });
+
+  describe('findArticleSummaryOrThrow', () => {
+    it('should return article summary when article exists', async () => {
+      mockArticlesRepository.findSummaryBySlug.mockResolvedValue({
+        id: baseArticle.id,
+        authorId: baseArticle.authorId,
+      });
+
+      const result = await service.findArticleSummaryOrThrow(baseArticle.slug);
+
+      expect(mockArticlesRepository.findSummaryBySlug).toHaveBeenCalledWith(baseArticle.slug);
+      expect(result).toEqual({ id: baseArticle.id, authorId: baseArticle.authorId });
+    });
+
+    it('should throw NotFoundException when article does not exist', async () => {
+      mockArticlesRepository.findSummaryBySlug.mockResolvedValue(null);
+
+      await expect(service.findArticleSummaryOrThrow('missing-slug')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -107,10 +134,12 @@ describe('ArticlesService', () => {
   describe('findAll', () => {
     it('should return paginated articles and count with user interactions', async () => {
       mockArticlesRepository.findAll.mockResolvedValue([[baseArticle], 1]);
-      mockArticlesRepository.findUserInteractions.mockResolvedValue({
-        favoritedIds: new Set([baseArticle.id]),
-        followingIds: new Set([authorUser.id]),
-      });
+      mockArticlesRepository.findFavoritedArticleIds.mockResolvedValue(
+        new Set([baseArticle.id]),
+      );
+      mockProfilesService.findFollowingIds.mockResolvedValue(
+        new Set([authorUser.id]),
+      );
 
       const result = await service.findAll({ tag: 'dragons', limit: 10, offset: 0 }, otherUser);
 
@@ -129,7 +158,8 @@ describe('ArticlesService', () => {
 
       const result = await service.findAll({}, otherUser);
 
-      expect(mockArticlesRepository.findUserInteractions).not.toHaveBeenCalled();
+      expect(mockArticlesRepository.findFavoritedArticleIds).not.toHaveBeenCalled();
+      expect(mockProfilesService.findFollowingIds).not.toHaveBeenCalled();
       expect(result).toEqual({ articles: [], articlesCount: 0 });
     });
   });
@@ -137,10 +167,8 @@ describe('ArticlesService', () => {
   describe('findFeed', () => {
     it('should return followed users articles', async () => {
       mockArticlesRepository.findFeed.mockResolvedValue([[baseArticle], 1]);
-      mockArticlesRepository.findUserInteractions.mockResolvedValue({
-        favoritedIds: new Set<string>(),
-        followingIds: new Set([authorUser.id]),
-      });
+      mockArticlesRepository.findFavoritedArticleIds.mockResolvedValue(new Set<string>());
+      mockProfilesService.findFollowingIds.mockResolvedValue(new Set([authorUser.id]));
 
       const result = await service.findFeed({ limit: 5, offset: 0 }, otherUser);
 
@@ -165,7 +193,8 @@ describe('ArticlesService', () => {
 
       const result = await service.findOne(baseArticle.slug, null);
 
-      expect(mockArticlesRepository.findUserInteractions).not.toHaveBeenCalled();
+      expect(mockArticlesRepository.findFavoritedArticleIds).not.toHaveBeenCalled();
+      expect(mockProfilesService.findFollowingIds).not.toHaveBeenCalled();
       expect(result.article.favorited).toBe(false);
       expect(result.article.author.following).toBe(false);
     });
@@ -224,10 +253,10 @@ describe('ArticlesService', () => {
       const favArticle = { ...baseArticle, favoritesCount: 1 };
       mockArticlesRepository.findBySlug.mockResolvedValue(baseArticle);
       mockArticlesRepository.addFavorite.mockResolvedValue(favArticle);
-      mockArticlesRepository.findUserInteractions.mockResolvedValue({
-        favoritedIds: new Set([baseArticle.id]),
-        followingIds: new Set<string>(),
-      });
+      mockArticlesRepository.findFavoritedArticleIds.mockResolvedValue(
+        new Set([baseArticle.id]),
+      );
+      mockProfilesService.findFollowingIds.mockResolvedValue(new Set<string>());
 
       const result = await service.favorite(baseArticle.slug, otherUser);
 

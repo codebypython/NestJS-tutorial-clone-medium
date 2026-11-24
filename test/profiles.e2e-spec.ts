@@ -6,7 +6,6 @@ import { Repository } from 'typeorm';
 import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/filters/http-exception.filter';
 import { ConduitValidationPipe } from '../src/common/pipes/validation.pipe';
-import { Follow } from '../src/modules/profiles/entities/follow.entity';
 import { User } from '../src/modules/users/entities/user.entity';
 
 describe('Profiles & Social Follow Endpoints (e2e)', () => {
@@ -52,15 +51,12 @@ describe('Profiles & Social Follow Endpoints (e2e)', () => {
     if (app) {
       try {
         const userRepo = app.get<Repository<User>>(getRepositoryToken(User));
-        const followRepo = app.get<Repository<Follow>>(
-          getRepositoryToken(Follow),
-        );
-
-        await followRepo.delete({});
         await userRepo
           .createQueryBuilder()
           .delete()
-          .where('email LIKE :pattern', { pattern: '%@test.com' })
+          .where('email IN (:...emails)', {
+            emails: [followerUser.email, targetUser.email],
+          })
           .execute();
       } catch {
         // Suppress teardown error

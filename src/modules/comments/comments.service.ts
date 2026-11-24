@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { ArticlesRepository } from '../articles/articles.repository';
+import { ArticlesService } from '../articles/articles.service';
+import { ProfilesService } from '../profiles/profiles.service';
 import { User } from '../users/entities/user.entity';
 import { CommentsRepository } from './comments.repository';
 import {
@@ -13,25 +14,16 @@ import { toCommentData, toSingleCommentResponse } from './mappers/comment.mapper
 export class CommentsService {
   constructor(
     private readonly commentsRepository: CommentsRepository,
-    private readonly articlesRepository: ArticlesRepository,
+    private readonly articlesService: ArticlesService,
+    private readonly profilesService: ProfilesService,
   ) {}
-
-  private async findArticleOrThrow(slug: string) {
-    const article = await this.articlesRepository.findBySlug(slug);
-    if (!article) {
-      throw new NotFoundException({
-        errors: { article: ['article not found'] },
-      });
-    }
-    return article;
-  }
 
   async addComment(
     slug: string,
     dto: CreateCommentDto,
     currentUser: User,
   ): Promise<SingleCommentResponseDto> {
-    const article = await this.findArticleOrThrow(slug);
+    const article = await this.articlesService.findArticleSummaryOrThrow(slug);
 
     const comment = await this.commentsRepository.create({
       body: dto.comment.body,
@@ -47,7 +39,7 @@ export class CommentsService {
     slug: string,
     currentUser?: User | null,
   ): Promise<MultipleCommentsResponseDto> {
-    const article = await this.findArticleOrThrow(slug);
+    const article = await this.articlesService.findArticleSummaryOrThrow(slug);
     const comments = await this.commentsRepository.findByArticleId(article.id);
 
     if (comments.length === 0) {
@@ -57,7 +49,7 @@ export class CommentsService {
     let followingIds = new Set<string>();
     if (currentUser?.id) {
       const authorIds = Array.from(new Set(comments.map((c) => c.authorId)));
-      followingIds = await this.commentsRepository.findFollowingAuthorIds(
+      followingIds = await this.profilesService.findFollowingIds(
         currentUser.id,
         authorIds,
       );
@@ -69,10 +61,10 @@ export class CommentsService {
   }
 
   async deleteComment(slug: string, id: number, currentUser: User): Promise<void> {
-    const article = await this.findArticleOrThrow(slug);
-    const comment = await this.commentsRepository.findById(id);
+    const article = await this.articlesService.findArticleSummaryOrThrow(slug);
+    const comment = await this.commentsRepository.findByIdAndArticleId(id, article.id);
 
-    if (!comment || comment.articleId !== article.id) {
+    if (!comment) {
       throw new NotFoundException({
         errors: { comment: ['comment not found'] },
       });

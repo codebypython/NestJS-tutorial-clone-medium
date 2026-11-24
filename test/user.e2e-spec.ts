@@ -8,7 +8,7 @@ import { Repository } from 'typeorm';
 import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/filters/http-exception.filter';
 import { ConduitValidationPipe } from '../src/common/pipes/validation.pipe';
-import { Attachment } from '../src/modules/attachments/entities/attachment.entity';
+import { Attachment, AttachmentTargetType } from '../src/modules/attachments/entities/attachment.entity';
 import { User } from '../src/modules/users/entities/user.entity';
 
 describe('User & Attachments Endpoints (e2e)', () => {
@@ -48,13 +48,14 @@ describe('User & Attachments Endpoints (e2e)', () => {
         const attachmentRepo = app.get<Repository<Attachment>>(
           getRepositoryToken(Attachment),
         );
-
-        await attachmentRepo.delete({});
-        await userRepo
-          .createQueryBuilder()
-          .delete()
-          .where('email LIKE :pattern', { pattern: '%@test.com' })
-          .execute();
+        const user = await userRepo.findOne({ where: { email: testUser.email } });
+        if (user) {
+          await attachmentRepo.delete({
+            targetType: AttachmentTargetType.USER,
+            targetId: user.id,
+          });
+          await userRepo.delete({ id: user.id });
+        }
       } catch {
         // Suppress teardown error
       }

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '../auth/auth.module';
-import { Follow } from '../profiles/entities/follow.entity';
+import { ProfilesModule } from '../profiles/profiles.module';
 import { TagsModule } from '../tags/tags.module';
 import { ArticlesController } from './articles.controller';
 import { ArticlesRepository } from './articles.repository';
@@ -11,12 +11,13 @@ import { Article } from './entities/article.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Article, ArticleFavorite, Follow]),
+    TypeOrmModule.forFeature([Article, ArticleFavorite]),
     AuthModule,
+    ProfilesModule,
     TagsModule,
   ],
   controllers: [ArticlesController],
   providers: [ArticlesRepository, ArticlesService],
-  exports: [ArticlesRepository, ArticlesService, TypeOrmModule],
+  exports: [ArticlesService],
 })
 export class ArticlesModule {}

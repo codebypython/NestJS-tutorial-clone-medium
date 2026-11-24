@@ -1,7 +1,8 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { ArticlesRepository } from '../articles/articles.repository';
+import { ArticlesService } from '../articles/articles.service';
 import { Article } from '../articles/entities/article.entity';
+import { ProfilesService } from '../profiles/profiles.service';
 import { User } from '../users/entities/user.entity';
 import { CommentsRepository } from './comments.repository';
 import { CommentsService } from './comments.service';
@@ -69,15 +70,18 @@ describe('CommentsService', () => {
   };
 
   const mockCommentsRepository = {
-    findById: jest.fn(),
+    findByIdAndArticleId: jest.fn(),
     findByArticleId: jest.fn(),
-    findFollowingAuthorIds: jest.fn(),
     create: jest.fn(),
     deleteById: jest.fn(),
   };
 
-  const mockArticlesRepository = {
-    findBySlug: jest.fn(),
+  const mockArticlesService = {
+    findArticleSummaryOrThrow: jest.fn(),
+  };
+
+  const mockProfilesService = {
+    findFollowingIds: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -85,7 +89,8 @@ describe('CommentsService', () => {
       providers: [
         CommentsService,
         { provide: CommentsRepository, useValue: mockCommentsRepository },
-        { provide: ArticlesRepository, useValue: mockArticlesRepository },
+        { provide: ArticlesService, useValue: mockArticlesService },
+        { provide: ProfilesService, useValue: mockProfilesService },
       ],
     }).compile();
 
@@ -95,7 +100,9 @@ describe('CommentsService', () => {
 
   describe('addComment', () => {
     it('should throw NotFoundException if article does not exist', async () => {
-      mockArticlesRepository.findBySlug.mockResolvedValue(null);
+      mockArticlesService.findArticleSummaryOrThrow.mockRejectedValue(
+        new NotFoundException({ errors: { article: ['article not found'] } }),
+      );
 
       await expect(
         service.addComment('missing-slug', { comment: { body: 'Test' } }, commentAuthor),
@@ -103,7 +110,10 @@ describe('CommentsService', () => {
     });
 
     it('should create comment and return single comment response', async () => {
-      mockArticlesRepository.findBySlug.mockResolvedValue(mockArticle);
+      mockArticlesService.findArticleSummaryOrThrow.mockResolvedValue({
+        id: mockArticle.id,
+        authorId: mockArticle.authorId,
+      });
       mockCommentsRepository.create.mockResolvedValue(mockComment);
 
       const result = await service.addComment(
@@ -125,13 +135,18 @@ describe('CommentsService', () => {
 
   describe('getComments', () => {
     it('should throw NotFoundException if article does not exist', async () => {
-      mockArticlesRepository.findBySlug.mockResolvedValue(null);
+      mockArticlesService.findArticleSummaryOrThrow.mockRejectedValue(
+        new NotFoundException({ errors: { article: ['article not found'] } }),
+      );
 
       await expect(service.getComments('missing-slug', null)).rejects.toThrow(NotFoundException);
     });
 
     it('should return empty list when no comments exist', async () => {
-      mockArticlesRepository.findBySlug.mockResolvedValue(mockArticle);
+      mockArticlesService.findArticleSummaryOrThrow.mockResolvedValue({
+        id: mockArticle.id,
+        authorId: mockArticle.authorId,
+      });
       mockCommentsRepository.findByArticleId.mockResolvedValue([]);
 
       const result = await service.getComments(mockArticle.slug, null);
@@ -140,15 +155,18 @@ describe('CommentsService', () => {
     });
 
     it('should return comments with following status for authenticated user', async () => {
-      mockArticlesRepository.findBySlug.mockResolvedValue(mockArticle);
+      mockArticlesService.findArticleSummaryOrThrow.mockResolvedValue({
+        id: mockArticle.id,
+        authorId: mockArticle.authorId,
+      });
       mockCommentsRepository.findByArticleId.mockResolvedValue([mockComment]);
-      mockCommentsRepository.findFollowingAuthorIds.mockResolvedValue(
+      mockProfilesService.findFollowingIds.mockResolvedValue(
         new Set([commentAuthor.id]),
       );
 
       const result = await service.getComments(mockArticle.slug, articleAuthor);
 
-      expect(mockCommentsRepository.findFollowingAuthorIds).toHaveBeenCalledWith(articleAuthor.id, [
+      expect(mockProfilesService.findFollowingIds).toHaveBeenCalledWith(articleAuthor.id, [
         commentAuthor.id,
       ]);
       expect(result.comments[0].author.following).toBe(true);
@@ -157,7 +175,9 @@ describe('CommentsService', () => {
 
   describe('deleteComment', () => {
     it('should throw NotFoundException if article does not exist', async () => {
-      mockArticlesRepository.findBySlug.mockResolvedValue(null);
+      mockArticlesService.findArticleSummaryOrThrow.mockRejectedValue(
+        new NotFoundException({ errors: { article: ['article not found'] } }),
+      );
 
       await expect(service.deleteComment('missing-slug', 1, commentAuthor)).rejects.toThrow(
         NotFoundException,
@@ -165,29 +185,23 @@ describe('CommentsService', () => {
     });
 
     it('should throw NotFoundException if comment does not exist', async () => {
-      mockArticlesRepository.findBySlug.mockResolvedValue(mockArticle);
-      mockCommentsRepository.findById.mockResolvedValue(null);
+      mockArticlesService.findArticleSummaryOrThrow.mockResolvedValue({
+        id: mockArticle.id,
+        authorId: mockArticle.authorId,
+      });
+      mockCommentsRepository.findByIdAndArticleId.mockResolvedValue(null);
 
       await expect(service.deleteComment(mockArticle.slug, 999, commentAuthor)).rejects.toThrow(
         NotFoundException,
       );
     });
 
-    it('should throw NotFoundException if comment belongs to another article', async () => {
-      mockArticlesRepository.findBySlug.mockResolvedValue(mockArticle);
-      mockCommentsRepository.findById.mockResolvedValue({
-        ...mockComment,
-        articleId: 'different-article-id',
-      });
-
-      await expect(service.deleteComment(mockArticle.slug, 1, commentAuthor)).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-
     it('should throw ForbiddenException if user is neither comment author nor article owner', async () => {
-      mockArticlesRepository.findBySlug.mockResolvedValue(mockArticle);
-      mockCommentsRepository.findById.mockResolvedValue(mockComment);
+      mockArticlesService.findArticleSummaryOrThrow.mockResolvedValue({
+        id: mockArticle.id,
+        authorId: mockArticle.authorId,
+      });
+      mockCommentsRepository.findByIdAndArticleId.mockResolvedValue(mockComment);
 
       await expect(service.deleteComment(mockArticle.slug, 1, thirdUser)).rejects.toThrow(
         ForbiddenException,
@@ -195,8 +209,11 @@ describe('CommentsService', () => {
     });
 
     it('should allow comment author to delete comment', async () => {
-      mockArticlesRepository.findBySlug.mockResolvedValue(mockArticle);
-      mockCommentsRepository.findById.mockResolvedValue(mockComment);
+      mockArticlesService.findArticleSummaryOrThrow.mockResolvedValue({
+        id: mockArticle.id,
+        authorId: mockArticle.authorId,
+      });
+      mockCommentsRepository.findByIdAndArticleId.mockResolvedValue(mockComment);
 
       await service.deleteComment(mockArticle.slug, 1, commentAuthor);
 
@@ -204,8 +221,11 @@ describe('CommentsService', () => {
     });
 
     it('should allow article owner to delete any comment on their article', async () => {
-      mockArticlesRepository.findBySlug.mockResolvedValue(mockArticle);
-      mockCommentsRepository.findById.mockResolvedValue(mockComment);
+      mockArticlesService.findArticleSummaryOrThrow.mockResolvedValue({
+        id: mockArticle.id,
+        authorId: mockArticle.authorId,
+      });
+      mockCommentsRepository.findByIdAndArticleId.mockResolvedValue(mockComment);
 
       await service.deleteComment(mockArticle.slug, 1, articleAuthor);
 

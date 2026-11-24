@@ -6,7 +6,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { isDuplicateEntryError } from '../../common/utils/database-error.util';
 import { User } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
@@ -62,6 +62,25 @@ export class ProfilesService {
         following: isFollowing,
       },
     };
+  }
+
+  async findFollowingIds(
+    followerId: string,
+    authorIds: string[],
+  ): Promise<Set<string>> {
+    if (!followerId || !authorIds || authorIds.length === 0) {
+      return new Set<string>();
+    }
+
+    const follows = await this.followRepository.find({
+      where: {
+        followerId,
+        followingId: In(authorIds),
+      },
+      select: ['followingId'],
+    });
+
+    return new Set(follows.map((follow) => follow.followingId));
   }
 
   async followUser(

@@ -63,5 +63,27 @@ describe('Comment DTO Validation', () => {
         }),
       ).rejects.toThrow(UnprocessableEntityException);
     });
+
+    it('should reject comment body exceeding max length with dynamic constraint message', async () => {
+      const payload = {
+        comment: {
+          body: 'a'.repeat(4001),
+        },
+      };
+
+      try {
+        await pipe.transform(payload, {
+          type: 'body',
+          metatype: CreateCommentDto,
+        });
+        throw new Error('Expected pipe.transform to throw UnprocessableEntityException');
+      } catch (err) {
+        expect(err).toBeInstanceOf(UnprocessableEntityException);
+        const response = (err as UnprocessableEntityException).getResponse() as {
+          errors: Record<string, string[]>;
+        };
+        expect(response.errors.body).toContain('body must not exceed 4000 characters');
+      }
+    });
   });
 });

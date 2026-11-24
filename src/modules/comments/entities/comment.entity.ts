@@ -16,8 +16,7 @@ export const COMMENT_ARTICLE_ID_LENGTH = 36;
 
 @Entity('comments')
 @Index('IDX_comments_author_id', ['authorId'])
-@Index('IDX_comments_article_id', ['articleId'])
-@Index('IDX_comments_created_at', ['createdAt'])
+@Index('IDX_comments_article_id_created_at', ['articleId', 'createdAt'])
 export class Comment {
   @PrimaryGeneratedColumn('increment')
   id!: number;

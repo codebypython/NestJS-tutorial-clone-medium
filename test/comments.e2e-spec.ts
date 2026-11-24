@@ -6,11 +6,6 @@ import { Repository } from 'typeorm';
 import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/filters/http-exception.filter';
 import { ConduitValidationPipe } from '../src/common/pipes/validation.pipe';
-import { ArticleFavorite } from '../src/modules/articles/entities/article-favorite.entity';
-import { Article } from '../src/modules/articles/entities/article.entity';
-import { Comment } from '../src/modules/comments/entities/comment.entity';
-import { Follow } from '../src/modules/profiles/entities/follow.entity';
-import { Tag } from '../src/modules/tags/entities/tag.entity';
 import { User } from '../src/modules/users/entities/user.entity';
 
 describe('Comments Endpoints (e2e)', () => {
@@ -81,22 +76,13 @@ describe('Comments Endpoints (e2e)', () => {
   afterAll(async () => {
     if (app) {
       try {
-        const commentRepo = app.get<Repository<Comment>>(getRepositoryToken(Comment));
-        const favRepo = app.get<Repository<ArticleFavorite>>(getRepositoryToken(ArticleFavorite));
-        const articleRepo = app.get<Repository<Article>>(getRepositoryToken(Article));
-        const tagRepo = app.get<Repository<Tag>>(getRepositoryToken(Tag));
-        const followRepo = app.get<Repository<Follow>>(getRepositoryToken(Follow));
         const userRepo = app.get<Repository<User>>(getRepositoryToken(User));
-
-        await commentRepo.delete({});
-        await favRepo.delete({});
-        await articleRepo.delete({});
-        await tagRepo.delete({});
-        await followRepo.delete({});
         await userRepo
           .createQueryBuilder()
           .delete()
-          .where('email LIKE :pattern', { pattern: '%@test.com' })
+          .where('email IN (:...emails)', {
+            emails: [authorUser.email, commenterUser.email, strangerUser.email],
+          })
           .execute();
       } catch {
         // Suppress teardown errors

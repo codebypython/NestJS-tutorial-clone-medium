@@ -14,6 +14,6 @@ import { ProfilesService } from './profiles.service';
   ],
   controllers: [ProfilesController],
   providers: [ProfilesService],
-  exports: [ProfilesService, TypeOrmModule],
+  exports: [ProfilesService],
 })
 export class ProfilesModule {}
