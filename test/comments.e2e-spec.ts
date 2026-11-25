@@ -299,4 +299,131 @@ describe('CommentsController C2 Branch Coverage (e2e)', () => {
       expect(res.body.errors.article).toEqual(['article not found']);
     });
   });
+
+  describe('DELETE /api/articles/:slug/comments/:id', () => {
+    it('should reject unauthenticated delete request with 401', async () => {
+      const seededComment = await seedFakeComment(app, commenter.user, article);
+
+      await request(app.getHttpServer())
+        .delete(`/api/articles/${article.slug}/comments/${seededComment.id}`)
+        .expect(401);
+
+      expect(await commentRepository.findOneBy({ id: seededComment.id })).not.toBeNull();
+    });
+
+    it('should reject delete request using a blacklisted JWT token with 401', async () => {
+      const seededComment = await seedFakeComment(app, commenter.user, article);
+
+      await request(app.getHttpServer())
+        .post('/api/users/logout')
+        .set('Authorization', `Token ${commenter.token}`)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .delete(`/api/articles/${article.slug}/comments/${seededComment.id}`)
+        .set('Authorization', `Token ${commenter.token}`)
+        .expect(401);
+
+      expect(await commentRepository.findOneBy({ id: seededComment.id })).not.toBeNull();
+    });
+
+    it('should reject non-numeric comment id with 400 via ParseIntPipe', async () => {
+      await request(app.getHttpServer())
+        .delete(`/api/articles/${article.slug}/comments/not-a-number`)
+        .set('Authorization', `Token ${commenter.token}`)
+        .expect(400);
+    });
+
+    it('should return 404 when article slug does not exist', async () => {
+      const seededComment = await seedFakeComment(app, commenter.user, article);
+
+      const res = await request(app.getHttpServer())
+        .delete(`/api/articles/nonexistent-article-slug-del/comments/${seededComment.id}`)
+        .set('Authorization', `Token ${commenter.token}`)
+        .expect(404);
+
+      expect(res.body.errors.article).toEqual(['article not found']);
+    });
+
+    it('should return 404 when comment id does not exist', async () => {
+      const res = await request(app.getHttpServer())
+        .delete(`/api/articles/${article.slug}/comments/999999`)
+        .set('Authorization', `Token ${commenter.token}`)
+        .expect(404);
+
+      expect(res.body.errors.comment).toEqual(['comment not found']);
+    });
+
+    it('should return 404 when comment belongs to a different article', async () => {
+      const otherArticle = await seedFakeArticle(app, articleAuthor.user);
+      const otherArticleComment = await seedFakeComment(app, commenter.user, otherArticle);
+
+      const res = await request(app.getHttpServer())
+        .delete(`/api/articles/${article.slug}/comments/${otherArticleComment.id}`)
+        .set('Authorization', `Token ${commenter.token}`)
+        .expect(404);
+
+      expect(res.body.errors.comment).toEqual(['comment not found']);
+      expect(await commentRepository.findOneBy({ id: otherArticleComment.id })).not.toBeNull();
+    });
+
+    it('should return 403 when stranger is neither comment author nor article author', async () => {
+      const seededComment = await seedFakeComment(app, commenter.user, article);
+
+      const res = await request(app.getHttpServer())
+        .delete(`/api/articles/${article.slug}/comments/${seededComment.id}`)
+        .set('Authorization', `Token ${stranger.token}`)
+        .expect(403);
+
+      expect(res.body.errors.comment).toEqual(['you are not authorized to delete this comment']);
+      expect(await commentRepository.findOneBy({ id: seededComment.id })).not.toBeNull();
+    });
+
+    it('should allow comment author to delete their own comment on another user article (204)', async () => {
+      const seededComment = await seedFakeComment(app, commenter.user, article);
+
+      await request(app.getHttpServer())
+        .delete(`/api/articles/${article.slug}/comments/${seededComment.id}`)
+        .set('Authorization', `Token ${commenter.token}`)
+        .expect(204);
+
+      expect(await commentRepository.findOneBy({ id: seededComment.id })).toBeNull();
+    });
+
+    it('should allow article author to delete another user comment via dual-ownership (204)', async () => {
+      const seededComment = await seedFakeComment(app, commenter.user, article);
+
+      await request(app.getHttpServer())
+        .delete(`/api/articles/${article.slug}/comments/${seededComment.id}`)
+        .set('Authorization', `Token ${articleAuthor.token}`)
+        .expect(204);
+
+      expect(await commentRepository.findOneBy({ id: seededComment.id })).toBeNull();
+    });
+
+    it('should allow article author to delete their own comment on their own article (204)', async () => {
+      const selfComment = await seedFakeComment(app, articleAuthor.user, article);
+
+      await request(app.getHttpServer())
+        .delete(`/api/articles/${article.slug}/comments/${selfComment.id}`)
+        .set('Authorization', `Token ${articleAuthor.token}`)
+        .expect(204);
+
+      expect(await commentRepository.findOneBy({ id: selfComment.id })).toBeNull();
+    });
+
+    it('should cascade delete all comments when parent article is deleted (204)', async () => {
+      await seedFakeComment(app, commenter.user, article);
+      await seedFakeComment(app, stranger.user, article);
+
+      expect(await commentRepository.count({ where: { articleId: article.id } })).toBe(2);
+
+      await request(app.getHttpServer())
+        .delete(`/api/articles/${article.slug}`)
+        .set('Authorization', `Token ${articleAuthor.token}`)
+        .expect(204);
+
+      expect(await commentRepository.count({ where: { articleId: article.id } })).toBe(0);
+    });
+  });
 });
