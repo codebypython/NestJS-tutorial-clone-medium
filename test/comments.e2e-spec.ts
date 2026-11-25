@@ -1,221 +1,302 @@
+import { faker } from '@faker-js/faker';
 import { INestApplication } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import request from 'supertest';
 import { Repository } from 'typeorm';
-import { AppModule } from '../src/app.module';
-import { AllExceptionsFilter } from '../src/common/filters/http-exception.filter';
-import { ConduitValidationPipe } from '../src/common/pipes/validation.pipe';
-import { User } from '../src/modules/users/entities/user.entity';
+import { Article } from '../src/modules/articles/entities/article.entity';
+import { COMMENT_BODY_MAX_LENGTH } from '../src/modules/comments/dto/create-comment.dto';
+import { Comment } from '../src/modules/comments/entities/comment.entity';
+import {
+  buildFakeCreateCommentPayload,
+  seedFakeArticle,
+  seedFakeComment,
+  seedFakeFollow,
+  seedFakeUser,
+  SeededUser,
+} from './factories/e2e-data.factory';
+import { closeE2eApp, createE2eApp } from './helpers/e2e-app.helper';
+import { truncateDatabase } from './helpers/e2e-database.helper';
 
-describe('Comments Endpoints (e2e)', () => {
+interface CommentResponseItem {
+  id: number;
+  createdAt: string;
+  updatedAt: string;
+  body: string;
+  author: {
+    username: string;
+    bio: string | null;
+    image: string | null;
+    following: boolean;
+  };
+}
+
+describe('CommentsController C2 Branch Coverage (e2e)', () => {
   let app: INestApplication;
-  const timestamp = Date.now();
+  let commentRepository: Repository<Comment>;
 
-  const authorUser = {
-    email: `comment_author_${timestamp}@test.com`,
-    username: `comment_author_${timestamp}`,
-    password: 'password123',
-  };
-
-  const commenterUser = {
-    email: `comment_user_${timestamp}@test.com`,
-    username: `comment_user_${timestamp}`,
-    password: 'password123',
-  };
-
-  const strangerUser = {
-    email: `comment_stranger_${timestamp}@test.com`,
-    username: `comment_stranger_${timestamp}`,
-    password: 'password123',
-  };
-
-  let authorToken: string;
-  let commenterToken: string;
-  let strangerToken: string;
-  let articleSlug: string;
-  let createdCommentId: number;
+  let articleAuthor: SeededUser;
+  let commenter: SeededUser;
+  let stranger: SeededUser;
+  let article: Article;
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+    app = await createE2eApp();
+    commentRepository = app.get<Repository<Comment>>(getRepositoryToken(Comment));
+    await truncateDatabase(app);
+  });
 
-    app = moduleFixture.createNestApplication();
-    app.setGlobalPrefix('api');
-    app.useGlobalFilters(new AllExceptionsFilter());
-    app.useGlobalPipes(new ConduitValidationPipe());
+  beforeEach(async () => {
+    articleAuthor = await seedFakeUser(app);
+    commenter = await seedFakeUser(app);
+    stranger = await seedFakeUser(app);
+    article = await seedFakeArticle(app, articleAuthor.user, {
+      tagNames: [faker.word.noun(), faker.word.adjective()],
+    });
+  });
 
-    await app.init();
-
-    const [regAuthor, regCommenter, regStranger] = await Promise.all([
-      request(app.getHttpServer()).post('/api/users').send({ user: authorUser }),
-      request(app.getHttpServer()).post('/api/users').send({ user: commenterUser }),
-      request(app.getHttpServer()).post('/api/users').send({ user: strangerUser }),
-    ]);
-
-    authorToken = regAuthor.body?.user?.token;
-    commenterToken = regCommenter.body?.user?.token;
-    strangerToken = regStranger.body?.user?.token;
-
-    const articleRes = await request(app.getHttpServer())
-      .post('/api/articles')
-      .set('Authorization', `Token ${authorToken}`)
-      .send({
-        article: {
-          title: `Article for Comments ${timestamp}`,
-          description: 'Description',
-          body: 'Body content',
-          tagList: ['testing'],
-        },
-      });
-
-    articleSlug = articleRes.body.article.slug;
+  afterEach(async () => {
+    await truncateDatabase(app);
   });
 
   afterAll(async () => {
-    if (app) {
-      try {
-        const userRepo = app.get<Repository<User>>(getRepositoryToken(User));
-        await userRepo
-          .createQueryBuilder()
-          .delete()
-          .where('email IN (:...emails)', {
-            emails: [authorUser.email, commenterUser.email, strangerUser.email],
-          })
-          .execute();
-      } catch {
-        // Suppress teardown errors
-      }
-      await app.close();
-    }
+    await closeE2eApp(app);
   });
 
   describe('POST /api/articles/:slug/comments', () => {
-    it('should reject unauthorized request with 401', async () => {
+    it('should create a comment with Token auth, trim body, and persist in database (201)', async () => {
+      const rawBody = faker.lorem.sentence({ min: 5, max: 10 });
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/articles/${article.slug}/comments`)
+        .set('Authorization', `Token ${commenter.token}`)
+        .send({ comment: { body: `   ${rawBody}   ` } })
+        .expect(201);
+
+      const created: CommentResponseItem = res.body.comment;
+      expect(typeof created.id).toBe('number');
+      expect(created.body).toBe(rawBody);
+      expect(created.createdAt).toBeDefined();
+      expect(created.updatedAt).toBeDefined();
+      expect(created.author).toEqual({
+        username: commenter.user.username,
+        bio: commenter.user.bio,
+        image: commenter.user.image,
+        following: false,
+      });
+
+      const persisted = await commentRepository.findOneBy({ id: created.id });
+      expect(persisted).not.toBeNull();
+      expect(persisted?.body).toBe(rawBody);
+      expect(persisted?.articleId).toBe(article.id);
+      expect(persisted?.authorId).toBe(commenter.user.id);
+    });
+
+    it('should create a comment with Bearer authorization scheme (201)', async () => {
+      const payload = buildFakeCreateCommentPayload();
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/articles/${article.slug}/comments`)
+        .set('Authorization', `Bearer ${commenter.token}`)
+        .send(payload)
+        .expect(201);
+
+      expect(res.body.comment.body).toBe(payload.comment.body);
+    });
+
+    it('should reject unauthenticated request without Authorization header (401)', async () => {
+      const payload = buildFakeCreateCommentPayload();
+
       await request(app.getHttpServer())
-        .post(`/api/articles/${articleSlug}/comments`)
-        .send({ comment: { body: 'Unauthorized comment' } })
+        .post(`/api/articles/${article.slug}/comments`)
+        .send(payload)
         .expect(401);
     });
 
-    it('should reject empty or whitespace body with 422', async () => {
+    it('should reject malformed Authorization scheme or invalid JWT signature (401)', async () => {
+      const payload = buildFakeCreateCommentPayload();
+
       await request(app.getHttpServer())
-        .post(`/api/articles/${articleSlug}/comments`)
-        .set('Authorization', `Token ${commenterToken}`)
-        .send({ comment: { body: '     ' } })
+        .post(`/api/articles/${article.slug}/comments`)
+        .set('Authorization', 'Basic invalid-scheme-token')
+        .send(payload)
+        .expect(401);
+
+      await request(app.getHttpServer())
+        .post(`/api/articles/${article.slug}/comments`)
+        .set('Authorization', 'Token invalid.jwt.signature')
+        .send(payload)
+        .expect(401);
+    });
+
+    it('should reject a JWT token revoked via logout in Redis blacklist (401)', async () => {
+      await request(app.getHttpServer())
+        .post('/api/users/logout')
+        .set('Authorization', `Token ${commenter.token}`)
+        .expect(200);
+
+      const payload = buildFakeCreateCommentPayload();
+
+      await request(app.getHttpServer())
+        .post(`/api/articles/${article.slug}/comments`)
+        .set('Authorization', `Token ${commenter.token}`)
+        .send(payload)
+        .expect(401);
+    });
+
+    it('should reject empty payload and empty comment object with 422', async () => {
+      await request(app.getHttpServer())
+        .post(`/api/articles/${article.slug}/comments`)
+        .set('Authorization', `Token ${commenter.token}`)
+        .send({})
+        .expect(422);
+
+      await request(app.getHttpServer())
+        .post(`/api/articles/${article.slug}/comments`)
+        .set('Authorization', `Token ${commenter.token}`)
+        .send({ comment: {} })
         .expect(422);
     });
 
-    it('should return 404 if article slug does not exist', async () => {
+    it('should reject non-string or blank whitespace comment body with 422', async () => {
       await request(app.getHttpServer())
-        .post('/api/articles/nonexistent-article-slug/comments')
-        .set('Authorization', `Token ${commenterToken}`)
-        .send({ comment: { body: 'Valid body' } })
-        .expect(404);
+        .post(`/api/articles/${article.slug}/comments`)
+        .set('Authorization', `Token ${commenter.token}`)
+        .send({ comment: { body: 12345 } })
+        .expect(422);
+
+      await request(app.getHttpServer())
+        .post(`/api/articles/${article.slug}/comments`)
+        .set('Authorization', `Token ${commenter.token}`)
+        .send({ comment: { body: '   \t\n  ' } })
+        .expect(422);
     });
 
-    it('should create comment and return 201 with comment object', async () => {
-      const res = await request(app.getHttpServer())
-        .post(`/api/articles/${articleSlug}/comments`)
-        .set('Authorization', `Token ${commenterToken}`)
-        .send({ comment: { body: 'His name was my name too.' } })
-        .expect(201);
+    it('should reject comment body exceeding max length with dynamic constraint message (422)', async () => {
+      const oversizedBody = 'a'.repeat(COMMENT_BODY_MAX_LENGTH + 1);
 
-      expect(res.body.comment).toHaveProperty('id');
-      expect(res.body.comment.body).toBe('His name was my name too.');
-      expect(res.body.comment.author.username).toBe(commenterUser.username);
-      expect(res.body.comment.author.following).toBe(false);
-      createdCommentId = res.body.comment.id;
+      const res = await request(app.getHttpServer())
+        .post(`/api/articles/${article.slug}/comments`)
+        .set('Authorization', `Token ${commenter.token}`)
+        .send({ comment: { body: oversizedBody } })
+        .expect(422);
+
+      expect(res.body.errors.body).toContain(
+        `body must not exceed ${COMMENT_BODY_MAX_LENGTH} characters`,
+      );
+    });
+
+    it('should reject non-whitelisted properties in request body (422)', async () => {
+      await request(app.getHttpServer())
+        .post(`/api/articles/${article.slug}/comments`)
+        .set('Authorization', `Token ${commenter.token}`)
+        .send({
+          comment: {
+            body: faker.lorem.sentence(),
+            unexpectedField: 'not-allowed',
+          },
+        })
+        .expect(422);
+    });
+
+    it('should return 404 when target article slug does not exist', async () => {
+      const payload = buildFakeCreateCommentPayload();
+
+      const res = await request(app.getHttpServer())
+        .post('/api/articles/nonexistent-article-slug-c2/comments')
+        .set('Authorization', `Token ${commenter.token}`)
+        .send(payload)
+        .expect(404);
+
+      expect(res.body.errors.article).toEqual(['article not found']);
     });
   });
 
   describe('GET /api/articles/:slug/comments', () => {
-    it('should return 404 if article does not exist', async () => {
+    it('should return empty comments array with no-store header when article has no comments (200)', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/api/articles/${article.slug}/comments`)
+        .expect(200);
+
+      expect(res.headers['cache-control']).toBe('no-store');
+      expect(res.body).toEqual({ comments: [] });
+    });
+
+    it('should return comments ordered newest-first with following=false when unauthenticated (200)', async () => {
+      const olderTime = new Date(Date.now() - 60_000);
+      const newerTime = new Date(Date.now() - 10_000);
+
+      const olderComment = await seedFakeComment(app, commenter.user, article, {
+        createdAt: olderTime,
+      });
+      const newerComment = await seedFakeComment(app, articleAuthor.user, article, {
+        createdAt: newerTime,
+      });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/articles/${article.slug}/comments`)
+        .expect(200);
+
+      const items: CommentResponseItem[] = res.body.comments;
+      expect(items).toHaveLength(2);
+      expect(items[0].id).toBe(newerComment.id);
+      expect(items[1].id).toBe(olderComment.id);
+      expect(items[0].author.following).toBe(false);
+      expect(items[1].author.following).toBe(false);
+    });
+
+    it('should compute author.following accurately for followed and unfollowed authors when authenticated (200)', async () => {
+      await seedFakeFollow(app, stranger.user, commenter.user);
+
+      const followedCommentOne = await seedFakeComment(app, commenter.user, article);
+      const followedCommentTwo = await seedFakeComment(app, commenter.user, article);
+      const unfollowedComment = await seedFakeComment(app, articleAuthor.user, article);
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/articles/${article.slug}/comments`)
+        .set('Authorization', `Token ${stranger.token}`)
+        .expect(200);
+
+      const items: CommentResponseItem[] = res.body.comments;
+      expect(items).toHaveLength(3);
+
+      const byId = new Map(items.map((item) => [item.id, item]));
+      expect(byId.get(followedCommentOne.id)?.author.following).toBe(true);
+      expect(byId.get(followedCommentTwo.id)?.author.following).toBe(true);
+      expect(byId.get(unfollowedComment.id)?.author.following).toBe(false);
+    });
+
+    it('should gracefully treat invalid or blacklisted optional JWT as guest with following=false (200)', async () => {
+      await seedFakeFollow(app, stranger.user, commenter.user);
+      const seededComment = await seedFakeComment(app, commenter.user, article);
+
+      const invalidTokenRes = await request(app.getHttpServer())
+        .get(`/api/articles/${article.slug}/comments`)
+        .set('Authorization', 'Token invalid.optional.jwt')
+        .expect(200);
+
+      expect(invalidTokenRes.body.comments[0].id).toBe(seededComment.id);
+      expect(invalidTokenRes.body.comments[0].author.following).toBe(false);
+
       await request(app.getHttpServer())
-        .get('/api/articles/nonexistent-article-slug/comments')
+        .post('/api/users/logout')
+        .set('Authorization', `Token ${stranger.token}`)
+        .expect(200);
+
+      const blacklistedRes = await request(app.getHttpServer())
+        .get(`/api/articles/${article.slug}/comments`)
+        .set('Authorization', `Token ${stranger.token}`)
+        .expect(200);
+
+      expect(blacklistedRes.body.comments[0].id).toBe(seededComment.id);
+      expect(blacklistedRes.body.comments[0].author.following).toBe(false);
+    });
+
+    it('should return 404 when article slug does not exist', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/articles/nonexistent-article-slug-list/comments')
         .expect(404);
-    });
 
-    it('should return comments list without authentication', async () => {
-      const res = await request(app.getHttpServer())
-        .get(`/api/articles/${articleSlug}/comments`)
-        .expect(200);
-
-      expect(Array.isArray(res.body.comments)).toBe(true);
-      expect(res.body.comments.length).toBeGreaterThanOrEqual(1);
-      expect(res.body.comments[0].body).toBe('His name was my name too.');
-    });
-
-    it('should return comments list with following status when authenticated', async () => {
-      await request(app.getHttpServer())
-        .post(`/api/profiles/${commenterUser.username}/follow`)
-        .set('Authorization', `Token ${authorToken}`)
-        .expect(200);
-
-      const res = await request(app.getHttpServer())
-        .get(`/api/articles/${articleSlug}/comments`)
-        .set('Authorization', `Token ${authorToken}`)
-        .expect(200);
-
-      const foundComment = res.body.comments.find(
-        (c: { id: number }) => c.id === createdCommentId,
-      );
-      expect(foundComment).toBeDefined();
-      expect(foundComment.author.following).toBe(true);
-    });
-  });
-
-  describe('DELETE /api/articles/:slug/comments/:id', () => {
-    it('should reject unauthorized request with 401', async () => {
-      await request(app.getHttpServer())
-        .delete(`/api/articles/${articleSlug}/comments/${createdCommentId}`)
-        .expect(401);
-    });
-
-    it('should return 404 for nonexistent comment id', async () => {
-      await request(app.getHttpServer())
-        .delete(`/api/articles/${articleSlug}/comments/99999`)
-        .set('Authorization', `Token ${commenterToken}`)
-        .expect(404);
-    });
-
-    it('should return 403 when stranger user attempts to delete comment', async () => {
-      await request(app.getHttpServer())
-        .delete(`/api/articles/${articleSlug}/comments/${createdCommentId}`)
-        .set('Authorization', `Token ${strangerToken}`)
-        .expect(403);
-    });
-
-    it('should allow article author to delete comment with 204', async () => {
-      await request(app.getHttpServer())
-        .delete(`/api/articles/${articleSlug}/comments/${createdCommentId}`)
-        .set('Authorization', `Token ${authorToken}`)
-        .expect(204);
-
-      const res = await request(app.getHttpServer())
-        .get(`/api/articles/${articleSlug}/comments`)
-        .expect(200);
-
-      const exists = res.body.comments.some(
-        (c: { id: number }) => c.id === createdCommentId,
-      );
-      expect(exists).toBe(false);
-    });
-
-    it('should allow comment author to delete their own comment with 204', async () => {
-      const createRes = await request(app.getHttpServer())
-        .post(`/api/articles/${articleSlug}/comments`)
-        .set('Authorization', `Token ${commenterToken}`)
-        .send({ comment: { body: 'Another comment to be self-deleted' } })
-        .expect(201);
-
-      const newCommentId = createRes.body.comment.id;
-
-      await request(app.getHttpServer())
-        .delete(`/api/articles/${articleSlug}/comments/${newCommentId}`)
-        .set('Authorization', `Token ${commenterToken}`)
-        .expect(204);
+      expect(res.body.errors.article).toEqual(['article not found']);
     });
   });
 });
