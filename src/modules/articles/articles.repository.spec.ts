@@ -2,7 +2,6 @@ import { InternalServerErrorException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import { Follow } from '../profiles/entities/follow.entity';
 import { Tag } from '../tags/entities/tag.entity';
 import { TagsService } from '../tags/tags.service';
 import { User } from '../users/entities/user.entity';
@@ -69,10 +68,6 @@ describe('ArticlesRepository', () => {
     delete: jest.fn(),
   };
 
-  const mockFollowRepo = {
-    find: jest.fn(),
-  };
-
   const mockTagRepo = {};
 
   const mockManager = {
@@ -106,7 +101,6 @@ describe('ArticlesRepository', () => {
         ArticlesRepository,
         { provide: getRepositoryToken(Article), useValue: mockArticleRepo },
         { provide: getRepositoryToken(ArticleFavorite), useValue: mockFavRepo },
-        { provide: getRepositoryToken(Follow), useValue: mockFollowRepo },
         { provide: TagsService, useValue: mockTagsService },
         { provide: DataSource, useValue: mockDataSource },
       ],
@@ -202,5 +196,38 @@ describe('ArticlesRepository', () => {
     });
     expect(mockQueryBuilder.execute).toHaveBeenCalled();
     expect(unfavorited.favoritesCount).toBe(4);
+  });
+
+  it('should find article summary by slug selecting only id and authorId', async () => {
+    mockArticleRepo.findOne.mockResolvedValueOnce({
+      id: baseArticle.id,
+      authorId: baseArticle.authorId,
+    });
+
+    const result = await repository.findSummaryBySlug(baseArticle.slug);
+
+    expect(mockArticleRepo.findOne).toHaveBeenCalledWith({
+      where: { slug: baseArticle.slug },
+      select: ['id', 'authorId'],
+    });
+    expect(result).toEqual({ id: baseArticle.id, authorId: baseArticle.authorId });
+  });
+
+  it('should return favorited article IDs for a given user', async () => {
+    mockFavRepo.find.mockResolvedValueOnce([{ articleId: baseArticle.id }]);
+
+    const result = await repository.findFavoritedArticleIds('reader-1', [baseArticle.id]);
+
+    expect(mockFavRepo.find).toHaveBeenCalledWith({
+      where: { userId: 'reader-1', articleId: expect.anything() },
+      select: ['articleId'],
+    });
+    expect(result).toEqual(new Set([baseArticle.id]));
+  });
+
+  it('should return empty Set when articleIds is empty in findFavoritedArticleIds', async () => {
+    const result = await repository.findFavoritedArticleIds('reader-1', []);
+    expect(result).toEqual(new Set());
+    expect(mockFavRepo.find).not.toHaveBeenCalled();
   });
 });

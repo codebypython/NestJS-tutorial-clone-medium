@@ -15,7 +15,7 @@ import {
 } from './dto/feed-articles-query.dto';
 import { ListArticlesQueryDto } from './dto/list-articles-query.dto';
 import { ArticleFavorite } from './entities/article-favorite.entity';
-import { Article } from './entities/article.entity';
+import { Article, ArticleSummary } from './entities/article.entity';
 import {
   buildBaseSlug,
   SLUG_COLLISION_ATTEMPTS,
@@ -37,11 +37,6 @@ export interface UpdateArticlePersistenceInput {
   tagList?: string[];
 }
 
-export interface UserArticleInteractions {
-  favoritedIds: Set<string>;
-  followingIds: Set<string>;
-}
-
 const ARTICLES_REPOSITORY_CONTEXT = 'ArticlesRepository';
 
 @Injectable()
@@ -51,8 +46,6 @@ export class ArticlesRepository {
     private readonly articleRepository: Repository<Article>,
     @InjectRepository(ArticleFavorite)
     private readonly favoriteRepository: Repository<ArticleFavorite>,
-    @InjectRepository(Follow)
-    private readonly followRepository: Repository<Follow>,
     private readonly tagsService: TagsService,
     private readonly dataSource: DataSource,
   ) {}
@@ -119,6 +112,13 @@ export class ArticlesRepository {
     });
   }
 
+  async findSummaryBySlug(slug: string): Promise<ArticleSummary | null> {
+    return this.articleRepository.findOne({
+      where: { slug },
+      select: ['id', 'authorId'],
+    });
+  }
+
   async findAll(query: ListArticlesQueryDto): Promise<[Article[], number]> {
     const limit = query.limit ?? DEFAULT_ARTICLES_LIMIT;
     const offset = query.offset ?? DEFAULT_ARTICLES_OFFSET;
@@ -178,30 +178,20 @@ export class ArticlesRepository {
       .getManyAndCount();
   }
 
-  async findUserInteractions(
+  async findFavoritedArticleIds(
     userId: string,
     articleIds: string[],
-    authorIds: string[],
-  ): Promise<UserArticleInteractions> {
+  ): Promise<Set<string>> {
     if (articleIds.length === 0) {
-      return { favoritedIds: new Set<string>(), followingIds: new Set<string>() };
+      return new Set<string>();
     }
 
-    const [favorites, follows] = await Promise.all([
-      this.favoriteRepository.find({
-        where: { userId, articleId: In(articleIds) },
-        select: ['articleId'],
-      }),
-      this.followRepository.find({
-        where: { followerId: userId, followingId: In(authorIds) },
-        select: ['followingId'],
-      }),
-    ]);
+    const favorites = await this.favoriteRepository.find({
+      where: { userId, articleId: In(articleIds) },
+      select: ['articleId'],
+    });
 
-    return {
-      favoritedIds: new Set(favorites.map((fav) => fav.articleId)),
-      followingIds: new Set(follows.map((follow) => follow.followingId)),
-    };
+    return new Set(favorites.map((fav) => fav.articleId));
   }
 
   async createWithSlugAndTags(input: CreateArticlePersistenceInput): Promise<Article> {

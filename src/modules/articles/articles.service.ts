@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ProfilesService } from '../profiles/profiles.service';
 import { User } from '../users/entities/user.entity';
 import { ArticlesRepository } from './articles.repository';
 import {
@@ -10,12 +11,26 @@ import { CreateArticleDto } from './dto/create-article.dto';
 import { FeedArticlesQueryDto } from './dto/feed-articles-query.dto';
 import { ListArticlesQueryDto } from './dto/list-articles-query.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
-import { Article } from './entities/article.entity';
+import { Article, ArticleSummary } from './entities/article.entity';
 import { toArticleData, toSingleArticleResponse } from './mappers/article.mapper';
 
 @Injectable()
 export class ArticlesService {
-  constructor(private readonly articlesRepository: ArticlesRepository) {}
+  constructor(
+    private readonly articlesRepository: ArticlesRepository,
+    private readonly profilesService: ProfilesService,
+  ) {}
+
+  async findArticleSummaryOrThrow(slug: string): Promise<ArticleSummary> {
+    const article = await this.articlesRepository.findSummaryBySlug(slug);
+    if (!article) {
+      throw new NotFoundException({
+        errors: { article: ['article not found'] },
+      });
+    }
+
+    return article;
+  }
 
   private async findArticleOrThrow(slug: string): Promise<Article> {
     const article = await this.articlesRepository.findBySlug(slug);
@@ -53,11 +68,10 @@ export class ArticlesService {
 
     const articleIds = articles.map((article) => article.id);
     const authorIds = Array.from(new Set(articles.map((article) => article.authorId)));
-    const { favoritedIds, followingIds } = await this.articlesRepository.findUserInteractions(
-      currentUser.id,
-      articleIds,
-      authorIds,
-    );
+    const [favoritedIds, followingIds] = await Promise.all([
+      this.articlesRepository.findFavoritedArticleIds(currentUser.id, articleIds),
+      this.profilesService.findFollowingIds(currentUser.id, authorIds),
+    ]);
 
     return articles.map((article) => toArticleData(article, favoritedIds, followingIds));
   }
@@ -71,11 +85,10 @@ export class ArticlesService {
       return toSingleArticleResponse(article, emptySet, emptySet);
     }
 
-    const { favoritedIds, followingIds } = await this.articlesRepository.findUserInteractions(
-      currentUser.id,
-      [article.id],
-      [article.authorId],
-    );
+    const [favoritedIds, followingIds] = await Promise.all([
+      this.articlesRepository.findFavoritedArticleIds(currentUser.id, [article.id]),
+      this.profilesService.findFollowingIds(currentUser.id, [article.authorId]),
+    ]);
 
     return toSingleArticleResponse(article, favoritedIds, followingIds);
   }

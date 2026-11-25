@@ -51,6 +51,7 @@ describe('ProfilesService', () => {
   };
 
   const mockFollowRepository = {
+    find: jest.fn(),
     findOneBy: jest.fn(),
     create: jest.fn(),
     save: jest.fn(),
@@ -253,6 +254,40 @@ describe('ProfilesService', () => {
         followingId: mockTargetUser.id,
       });
       expect(result.profile.following).toBe(false);
+    });
+  });
+
+  describe('findFollowingIds', () => {
+    it('should return empty Set when followerId is empty', async () => {
+      const result = await service.findFollowingIds('', [mockTargetUser.id]);
+      expect(result).toEqual(new Set());
+      expect(mockFollowRepository.find).not.toHaveBeenCalled();
+    });
+
+    it('should return empty Set when authorIds is empty', async () => {
+      const result = await service.findFollowingIds(mockCurrentUser.id, []);
+      expect(result).toEqual(new Set());
+      expect(mockFollowRepository.find).not.toHaveBeenCalled();
+    });
+
+    it('should query following relationships for author IDs', async () => {
+      mockFollowRepository.find.mockResolvedValue([
+        { followingId: mockTargetUser.id },
+      ]);
+
+      const result = await service.findFollowingIds(mockCurrentUser.id, [
+        mockTargetUser.id,
+        'other-author-id',
+      ]);
+
+      expect(mockFollowRepository.find).toHaveBeenCalledWith({
+        where: {
+          followerId: mockCurrentUser.id,
+          followingId: expect.anything(),
+        },
+        select: ['followingId'],
+      });
+      expect(result).toEqual(new Set([mockTargetUser.id]));
     });
   });
 });

@@ -17,6 +17,8 @@ export const ARTICLE_ID_LENGTH = 36;
 export const ARTICLE_SLUG_LENGTH = 255;
 export const ARTICLE_TITLE_LENGTH = 255;
 
+export type ArticleSummary = Pick<Article, 'id' | 'authorId'>;
+
 @Entity('articles')
 @Index('IDX_articles_author_id', ['authorId'])
 @Index('IDX_articles_created_at', ['createdAt'])
