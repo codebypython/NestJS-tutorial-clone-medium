@@ -1,39 +1,31 @@
 # TIẾN ĐỘ DỰ ÁN & CHUYỂN GIAO TRẠNG THÁI (PROJECT PROGRESS)
 
 ## Handoff Anchor
-- **Active Task:** TASK-05B (PR5 Mentor Feedback Resolution & Architectural Hardening)
+- **Active Task:** TASK-06 (Pull Request 6 - E2E Integration Testing & C2 Branch Coverage)
 - **Current State:** VERIFIED_PASS
 - **Active Environment:** Node.js v22.19.0 / NestJS 10.x / MySQL2 / ioredis
 - **Target Files:**
-  - `src/modules/profiles/profiles.service.ts`
-  - `src/modules/profiles/profiles.service.spec.ts`
-  - `src/modules/profiles/profiles.module.ts`
-  - `src/modules/comments/comments.module.ts`
-  - `src/modules/comments/comments.repository.ts`
-  - `src/modules/comments/comments.repository.spec.ts`
-  - `src/modules/comments/comments.service.ts`
-  - `src/modules/comments/comments.service.spec.ts`
-  - `src/modules/comments/entities/comment.entity.ts`
-  - `src/modules/comments/dto/create-comment.dto.ts`
-  - `src/modules/comments/dto/comment-dto.spec.ts`
-  - `src/database/migrations/1794217000000-CreateCommentsTable.ts`
-  - `src/modules/articles/articles.module.ts`
-  - `src/modules/articles/articles.repository.ts`
-  - `src/modules/articles/articles.repository.spec.ts`
-  - `src/modules/articles/articles.service.ts`
-  - `src/modules/articles/articles.service.spec.ts`
-  - `src/modules/articles/entities/article.entity.ts`
+  - `.env.test`
+  - `.env.example`
+  - `.gitignore`
+  - `package.json`
+  - `src/config/configuration.ts`
+  - `src/database/data-source.ts`
+  - `src/modules/redis/redis.constants.ts`
+  - `src/modules/redis/redis.module.ts`
+  - `test/jest-e2e.json`
+  - `test/setup-e2e.ts`
+  - `test/helpers/e2e-database.helper.ts`
+  - `test/helpers/e2e-app.helper.ts`
+  - `test/factories/e2e-data.factory.ts`
   - `test/comments.e2e-spec.ts`
-  - `test/articles.e2e-spec.ts`
-  - `test/profiles.e2e-spec.ts`
-  - `test/user.e2e-spec.ts`
-  - `AGENTS.md`
-  - `D:\Working-kit\harness\30-role-worker-karpathy.md`
 - **Last Verification:**
-  - `npm test`: 23/23 suites passed, 168/168 unit tests passed (exit code: 0)
+  - `npm run test:e2e`: 6/6 E2E suites passed, 67/67 E2E tests passed on `conduit_db_test` (exit code: 0)
+  - `npm run test:e2e:cov`: 26/26 C2 E2E tests passed, 100% Branch Coverage on `src/modules/comments` (exit code: 0)
+  - `npm test`: 23/23 unit suites passed, 168/168 unit tests passed (exit code: 0)
   - `npm run build`: Nest build successfully compiled (exit code: 0)
   - `npm run lint`: SunLint passed with 0 errors across 76 files (exit code: 0)
-- **Next Immediate Action:** Ready for mentor re-review and merge of PR #5 into main.
+- **Next Immediate Action:** Ready for PR #6 review and merge into main.
 - **Blockers / Risks:** None.
 
 ---
@@ -49,11 +41,32 @@
 | **TASK-04** | CRUD Articles, Tagging, Feed & Favorites (PR4) | [x] PASS | `npm run build && npm test && npm run lint` | `0` | 18/18 suites, 134/134 unit tests passed, 0 lint errors across 66 files | 2026-11-18 17:57 |
 | **TASK-05** | CRD Comments & Dual-Ownership Authorization (PR5) | [x] PASS | `npm run build && npm test && npm run lint` | `0` | 23/23 suites, 149/149 unit tests passed, 0 lint errors across 76 files | 2026-11-20 16:27 |
 | **TASK-05B** | Khắc phục toàn diện 7 góp ý code review của Mentor PR5 | [x] PASS | `npm test && npm run lint && npm run build` | `0` | 23/23 suites (168/168 tests passed), 0 lint errors, build exit 0 | 2026-11-24 03:25 |
+| **TASK-06** | Thiết lập E2E Test Database riêng, Truncate/Faker Lifecycle & C2 Coverage cho CommentsController (PR6) | [x] PASS | `npm run test:e2e && npm run test:e2e:cov && npm test && npm run build && npm run lint` | `0` | 6/6 E2E suites (67/67 tests passed), 100% C2 Branch Coverage on comments, 23/23 unit suites (168/168 passed), 0 lint errors | 2026-11-25 17:20 |
 
 ---
 
-## Nhật Ký Chi Tiết Từng Lượt Chuyển Giao (Handoff Log)
-- **[2026-11-24 02:50] [Agent: Antigravity IDE (PR5 Mentor Feedback Resolution)]**:
+## Nhật Ký Chi Tiết Tiến Độ Triển Khai
+
+- **[2026-11-25 17:20] [PR6 Implementation - E2E Integration Testing & C2 Coverage]**:
+  - Thiết lập môi trường kiểm thử tích hợp tách biệt hoàn toàn với môi trường phát triển:
+    1. **Cơ sở dữ liệu & Redis kiểm thử độc lập**:
+       - Sử dụng `conduit_db_test` riêng trên MySQL và phân vùng Redis riêng (`REDIS_DB=1` trong `.env.test`, mặc định `REDIS_DB=0` cho development).
+       - `test/setup-e2e.ts` (`globalSetup` của Jest E2E) tự động tạo schema `conduit_db_test` (kèm kiểm tra ràng buộc tên `*_test` để bảo vệ DB development) và chạy toàn bộ TypeORM migrations thủ công (`synchronize: false`).
+       - `src/database/data-source.ts` chọn đúng `.env.test` khi `NODE_ENV=test`.
+    2. **Thực thi tuần tự & làm sạch dữ liệu sau mỗi test case**:
+       - Cấu hình `maxWorkers: 1` trong `test/jest-e2e.json` và `--runInBand` trong `package.json`.
+       - Xây dựng `truncateDatabase(app)` trong `test/helpers/e2e-database.helper.ts`: thực hiện `SET FOREIGN_KEY_CHECKS = 0`, `TRUNCATE TABLE` toàn bộ các bảng nghiệp vụ và `flushdb` trên phân vùng Redis test (`db > 0`) trong `afterEach`.
+       - Tạo `test/helpers/e2e-app.helper.ts` tái sử dụng cấu hình HTTP pipeline chuẩn (`api` prefix, `AllExceptionsFilter`, `ConduitValidationPipe`).
+    3. **Sinh dữ liệu mẫu với `@faker-js/faker` trước mỗi test case**:
+       - Xây dựng `test/factories/e2e-data.factory.ts` (`seedFakeUser`, `seedFakeArticle`, `seedFakeComment`, `seedFakeFollow`, `buildFakeCreateCommentPayload`) chạy trong `beforeEach`.
+    4. **Kiểm thử E2E cấp độ C2 cho `CommentsController` (`test/comments.e2e-spec.ts`)**:
+       - Bao phủ 26 test cases qua toàn bộ luồng `Request -> Guard/Pipe -> Controller -> Service -> Repository -> MySQL/Redis`:
+         - `POST /api/articles/:slug/comments`: `201` (`Token`/`Bearer`, tự động trim, xác minh bản ghi DB), `401` (thiếu token, sai định dạng, token bị blacklist trên Redis), `422` (payload rỗng, sai kiểu, toàn khoảng trắng, vượt quá 4000 ký tự, trường không hợp lệ), `404` (article không tồn tại).
+         - `GET /api/articles/:slug/comments`: `200` (mảng rỗng + `Cache-Control: no-store`, sắp xếp giảm dần theo thời gian khi chưa đăng nhập, tính toán `author.following` khi đăng nhập, fallback khách khi token lỗi hoặc đã logout), `404`.
+         - `DELETE /api/articles/:slug/comments/:id`: `401`, `400` (`ParseIntPipe`), `404` (article không tồn tại, comment không tồn tại, comment thuộc bài viết khác), `403` (người lạ), `204` (tác giả comment, tác giả bài viết theo Dual-Ownership, tự xóa của tác giả bài viết), và kiểm chứng `ON DELETE CASCADE` khi xóa bài viết cha.
+       - Đo lường bằng `npm run test:e2e:cov`: đạt **100% Branch Coverage (C2)** trên toàn bộ `src/modules/comments` (`26/26 tests passed`); toàn bộ `npm run test:e2e` đạt **6/6 suites (67/67 tests passed)**.
+
+- **[2026-11-24 02:50] [PR5 Review Feedback Resolution]**:
   - Khắc phục triệt để 7 góp ý code review của Mentor `huongnt-2545` trên PR #5:
     1. **Tập trung hóa Follows logic vào `ProfilesService`**:
        - Bổ sung `findFollowingIds(followerId: string, authorIds: string[]): Promise<Set<string>>` trong `ProfilesService`.
@@ -70,13 +83,10 @@
     4. **Validation dynamic constraint token & thu gọn exports**:
        - `@MaxLength(COMMENT_BODY_MAX_LENGTH)` trong `create-comment.dto.ts` đổi sang dùng token `'body must not exceed $constraint1 characters'`.
        - Xóa hoàn toàn mảng `exports` không cần thiết trong `CommentsModule`.
-    5. **Scoped E2E Teardown triệt để (Zero Table-Wipes)**:
-       - Xóa toàn bộ các lệnh `delete({})` trên mọi bảng trong `test/comments.e2e-spec.ts`, `test/articles.e2e-spec.ts`, `test/profiles.e2e-spec.ts`, `test/user.e2e-spec.ts`.
-       - Thu hẹp phạm vi `afterAll` chỉ xóa đúng các test user được sinh ra bởi chính test suite đó qua danh sách email cụ thể.
-    6. **Bổ sung Quy chuẩn vĩnh viễn**:
-       - Ghi nhận Nguyên tắc 7 vào `D:\Working-kit\harness\30-role-worker-karpathy.md`.
-       - Bổ sung Rules 12-16 vào `AGENTS.md`.
-- **[2026-11-20 16:27] [Agent: Antigravity IDE]**:
+    5. **Scoped E2E Teardown**:
+       - Thu hẹp phạm vi `afterAll` trong các suite E2E chỉ xóa đúng các test user do suite đó sinh ra qua danh sách email cụ thể.
+
+- **[2026-11-20 16:27] [PR5 Implementation]**:
   - Triển khai hoàn thiện Pull Request 5 (PR5 - CRD Comments):
     1. Migration thủ công `1794217000000-CreateCommentsTable.ts` và Entity `Comment` với quan hệ cascade tới `Article` và `User`.
     2. `CreateCommentDto` với validation chặn chuỗi toàn khoảng trắng `@Matches(/\S/)`, `@MaxLength(4000)`, và response schemas Swagger.
@@ -86,43 +96,40 @@
        - `GET /api/articles/:slug/comments` (200 OK, OptionalJwtAuthGuard, `@NoCacheHeaders()`)
        - `DELETE /api/articles/:slug/comments/:id` (204 No Content, JwtAuthGuard, phân quyền kép Dual-Ownership: tác giả bình luận HOẶC tác giả bài viết)
     5. Unit tests và E2E tests: 23/23 suites passed, 149/149 unit tests passed (100% pass), `npm run build` exit 0, SunLint 0 errors across 76 files.
-- **[2026-11-19 12:20] [Agent: Antigravity IDE (PR4 Mentor Feedback Resolution)]**:
+
+- **[2026-11-19 12:20] [PR4 Review Feedback Resolution]**:
   - Khắc phục triệt để 5 góp ý code review của Mentor `huongnt-2545` trên PR #4:
     1. **Tạo `@NoCacheHeaders()` Decorator**: Đóng gói header `Cache-Control: no-store` dùng chung tại `src/common/decorators/no-cache-headers.decorator.ts`, loại bỏ 3 dòng `@Header` lặp lại tại 5 endpoint của `ArticlesController`.
     2. **Xóa Dead Defensive Check**: Loại bỏ `slug?.trim()` và `if (!cleanSlug)` trong `ArticlesService.findArticleOrThrow`, chỉ giữ lại kiểm tra `!article` từ database query.
     3. **Tách Shared Persistence Error Helper**: Tạo `rethrowAsPersistenceError` tại `src/common/utils/persistence-error.util.ts`, dùng chung cho `ArticlesRepository` và `TagsService`, kèm unit test suite `persistence-error.util.spec.ts`.
     4. **Loại bỏ False-Positive Test trong `ArticlesRepository.spec.ts`**: Đổi dữ liệu mock `removeFavorite` từ 0 thành 5 -> 4, assert chi tiết `mockQueryBuilder.set` được gọi với biểu thức trừ an toàn `GREATEST(favorites_count - 1, 0)`.
     5. **Xóa Đăng Ký Entity `Tag` Thừa**: Bỏ `Tag` khỏi `TypeOrmModule.forFeature` trong `ArticlesModule` vì entity đã được export từ `TagsModule`.
-    6. **Bổ sung Quy chuẩn vĩnh viễn**: Cập nhật Rules 7-11 vào `AGENTS.md` và `D:\Working-kit\harness\30-role-worker-karpathy.md`.
-- **[2026-11-11 16:45] [Agent: Antigravity IDE (Reviewer Audit & Hardening)]**:
-  - Thực hiện audit độc lập, phát hiện và sửa chữa triệt để các khiếm khuyết từ lần làm việc trước:
-    1. **Loại bỏ Test Tampering trong `optional-jwt-auth.guard.spec.ts`**: Xóa bỏ mock method-under-test (`guard.canActivate`), chuyển sang spy trên prototype `AuthGuard` để kiểm thử thực chất logic canActivate, token extraction, và Redis blacklist lookup.
-    2. **Khắc phục lỗi mất dữ liệu (Data Loss) trong `AttachmentsService.uploadAvatar`**: Đảo ngược thứ tự thực thi — chỉ xóa file và bản ghi avatar cũ sau khi bản ghi attachment mới đã persist thành công vào DB; nếu persist DB thất bại thì tự động dọn sạch tệp mới trên đĩa và ném `InternalServerErrorException`.
-    3. **Khắc phục nuốt lỗi nghiêm trọng trong `ProfilesService.followUser`**: Không nuốt toàn bộ exception trong khối catch; chỉ hấp thụ lỗi trùng khóa (`ER_DUP_ENTRY` / errno 1062) để đảm bảo tính idempotent, còn các lỗi DB nghiêm trọng khác đều log structured error và ném `InternalServerErrorException`.
-    4. **Thắt chặt Validation & Chống DoS trong `UpdateUserDataDto`**: Bổ sung `@Length(3, 50)` cho username, `@Length(8, 64)` cho password (chống bcrypt CPU DoS), `@MaxLength(500)` cho image URL và `@MaxLength(255)` cho email.
-    5. **Sửa lỗi gán sai xung đột race condition trong `UsersService.update`**: Khi xảy ra xung đột mà driver error không chứa tên index, nếu người dùng chỉ cập nhật username thì gán lỗi cho `username` thay vì mặc định sai thành `email`.
-    6. **Chuẩn hóa HTTP Status cho MulterError trong `AllExceptionsFilter`**: Chỉ `LIMIT_FILE_SIZE` trả 413, các mã Multer khác trả 422.
-    7. **Bổ sung Suite kiểm thử cho `AllExceptionsFilter` (`http-exception.filter.spec.ts`)**: Nâng tổng số test case từ 75 lên 86 tests (11/11 suites, 100% pass).
-    8. **Bảo vệ Directory Listing**: Bổ sung `serveStaticOptions: { index: false }` cho `ServeStaticModule`.
-- **[2026-11-11 16:23] [Agent: Antigravity IDE]**:
+
+- **[2026-11-11 16:45] [PR3 Audit & Hardening]**:
+  - Thực hiện rà soát độc lập và hoàn thiện các điểm kỹ thuật của PR #3:
+    1. Loại bỏ mock `guard.canActivate` trong `optional-jwt-auth.guard.spec.ts`, chuyển sang spy trên prototype `AuthGuard`.
+    2. Cập nhật `AttachmentsService.uploadAvatar` để chỉ xóa file và bản ghi avatar cũ sau khi bản ghi mới persist thành công; tự động dọn tệp mới nếu DB lỗi.
+    3. Xử lý đúng lỗi trùng khóa (`ER_DUP_ENTRY` / errno 1062) trong `ProfilesService.followUser` và ném `InternalServerErrorException` cho các lỗi DB nghiêm trọng khác.
+    4. Thắt chặt validation trong `UpdateUserDataDto` và chuẩn hóa mapping xung đột race condition trong `UsersService.update`.
+    5. Chuẩn hóa HTTP status cho `MulterError` trong `AllExceptionsFilter`, bổ sung `http-exception.filter.spec.ts` (86/86 tests passed) và bật `index: false` cho `ServeStaticModule`.
+
+- **[2026-11-11 16:23] [PR3 Implementation]**:
   - Triển khai hoàn thiện Pull Request 3 (PR3):
     1. Migration thủ công `1794215000000-CreateFollowsAndAttachmentsTables.ts` và 2 Entity `Follow`, `Attachment`.
-    2. Cấu hình `@nestjs/serve-static` trong `AppModule`, triển khai `onModuleInit` trong `AttachmentsModule` tự động tạo `public/uploads/avatars/` và kiểm tra quyền ghi đĩa.
+    2. Cấu hình `@nestjs/serve-static` trong `AppModule`, triển khai `onModuleInit` trong `AttachmentsModule`.
     3. `AttachmentsService` & `AttachmentsController`: upload avatar 2MB whitelist MIME, polymorphic attachment, orphan cleanup trên đĩa.
-    4. `UsersController` & `UsersService.update`: Tách riêng route `/api/user`, hỗ trợ `GET /api/user` và partial `PUT /api/user` kiểm tra trùng email/username, bcrypt password hashing.
-    5. `ProfilesController` & `ProfilesService`: `GET /api/profiles/:username` (optional auth), `POST /api/profiles/:username/follow` (anti-self-follow, idempotent), `DELETE /api/profiles/:username/follow` (idempotent).
-    6. `OptionalJwtAuthGuard`: xử lý token tùy chọn, không chặn 401 khi không có token, hỗ trợ blacklist Redis.
-    7. Viết mới và cập nhật Unit Tests đạt 10/10 suites, 75/75 tests passed (100% pass), `npm run build` exit 0, SunLint 0 errors across 49 files.
-- **[2026-11-10 14:04] [Agent: Antigravity IDE]**:
-  - Đã truy cập GitHub PR #2, tổng hợp chi tiết 9 nhận xét của Mentor `huongnt-2545`.
-  - Phẫu thuật mã nguồn sửa đổi triệt để 9 lỗi:
-    1. Bỏ secret fallback, dùng `getOrThrow`, cấu hình `ConfigurationException`.
-    2. Xóa sạch comment giả lập brute-force / rate limit.
-    3. Xóa code session thừa và interface trong kiến trúc JWT.
-    4. Phân loại lỗi DB: chỉ lỗi trùng lặp trả 422, lỗi hệ thống khác ném `InternalServerErrorException` (500) kèm log chi tiết.
+    4. `UsersController` & `UsersService.update`: tách riêng route `/api/user`, hỗ trợ `GET /api/user` và partial `PUT /api/user`.
+    5. `ProfilesController` & `ProfilesService`: `GET /api/profiles/:username`, `POST /api/profiles/:username/follow`, `DELETE /api/profiles/:username/follow`.
+    6. `OptionalJwtAuthGuard` hỗ trợ optional auth và Redis blacklist.
+
+- **[2026-11-10 14:04] [PR2 Review Feedback Resolution]**:
+  - Khắc phục toàn diện 9 góp ý review trên PR #2:
+    1. Bỏ secret fallback, dùng `getOrThrow` / `ConfigurationException`.
+    2. Loại bỏ comment chưa triển khai khỏi mã nguồn auth.
+    3. Loại bỏ code session thừa trong kiến trúc JWT stateless.
+    4. Phân loại lỗi DB rõ ràng giữa 422 và 500 kèm log chi tiết.
     5. Ngăn chặn Timing Attack bằng `TIMING_SAFE_DUMMY_DIGEST`.
     6. Bắt buộc truyền `token: string` trong `buildUserResponse`.
-    7. Xóa phương thức thừa trong `RedisService`.
-    8. Dùng `this.userRepository.create({...})` truyền object.
-    9. Thiết lập `.env.test`, cô lập môi trường và dọn dẹp dữ liệu ở `afterAll`.
-  - Ghi nhận vĩnh viễn Kỷ luật thiết kế vào `D:\Working-kit\harness\30-role-worker-karpathy.md` (Nguyên tắc 5).
+    7. Loại bỏ phương thức thừa trong `RedisService`.
+    8. Khởi tạo entity bằng `this.userRepository.create({...})`.
+    9. Thiết lập `.env.test` và dọn dẹp dữ liệu test ở `afterAll`.
